@@ -80,7 +80,7 @@ export default function YouTubePlayer({
             playsinline: 1,
             enablejsapi: 1,
             cc_lang_pref: 'en',
-            cc_load_policy: 0,
+            cc_load_policy: 1,
             origin: window.location.origin
           },
           events: {
