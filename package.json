@@ -1,0 +1,12 @@
+{
+  "name": "pasconix-video-portal",
+  "version": "1.0.0",
+  "description": "PASCONIX Video Portal - Private Educational Platform",
+  "scripts": {
+    "test": "npm --prefix server test",
+    "seed": "npm --prefix server run seed",
+    "server": "npm --prefix server start",
+    "client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build"
+  }
+}

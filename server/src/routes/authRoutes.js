@@ -1,0 +1,15 @@
+import { Router } from 'express';
+import { login, logout, getCurrentUser } from '../controllers/authController.js';
+import { authenticateUser } from '../middleware/auth.js';
+import { authLimiter } from '../middleware/rateLimiter.js';
+
+const router = Router();
+
+// In automated test environments, avoid hitting rate limits
+const loginMiddleware = process.env.NODE_ENV === 'test' ? [] : [authLimiter];
+
+router.post('/login', ...loginMiddleware, login);
+router.post('/logout', logout);
+router.get('/me', authenticateUser, getCurrentUser);
+
+export default router;
