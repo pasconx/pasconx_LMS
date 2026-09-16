@@ -60,7 +60,7 @@ export class VdoCipherProvider extends VideoProvider {
     }
 
     try {
-      const response = await fetch(`https://dev.vdocipher.com/api/meta/v2/videos/${videoId}/otp`, {
+      const response = await fetch(`https://dev.vdocipher.com/api/videos/${videoId}/otp`, {
         method: 'POST',
         headers: {
           'Authorization': `Apisecret ${apiSecret.trim()}`,
@@ -74,7 +74,8 @@ export class VdoCipherProvider extends VideoProvider {
               text: `${user.name} | ${user.email} | PXC-${user.id}`,
               alpha: '0.6',
               color: '0xFFFFFF',
-              size: '14'
+              size: '14',
+              interval: '5000'
             }
           ])
         })
@@ -95,9 +96,12 @@ export class VdoCipherProvider extends VideoProvider {
             disclaimer: 'Secured with studio-grade VdoCipher Multi-DRM (Widevine/FairPlay) & dynamic watermarking.'
           };
         }
+      } else {
+        const errText = await response.text();
+        console.warn(`VdoCipher API response (${response.status}):`, errText);
       }
     } catch (e) {
-      console.warn('VdoCipher API call note:', e.message);
+      console.warn('VdoCipher API call error:', e.message);
     }
 
     // Graceful fallback with valid VdoCipher embed structure
