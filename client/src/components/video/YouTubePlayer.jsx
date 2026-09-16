@@ -621,21 +621,20 @@ export default function YouTubePlayer({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200">
-            <ShieldCheck className="w-3.5 h-3.5" /> STEALTH_CONTENT_MODE
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-cyan-300 border border-brand-200 dark:border-brand-800">
+            <ShieldCheck className="w-3.5 h-3.5" /> Protected Session
           </span>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-            <Lock className="w-3.5 h-3.5" /> Watermarked Session
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            Student-specific watermark enabled
           </span>
         </div>
       </div>
 
       {/* Security Statement */}
-      <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-3.5 flex items-start gap-3 text-xs text-slate-700">
-        <ShieldCheck className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-900/60 p-3.5 flex items-start gap-3 text-xs text-slate-700 dark:text-slate-300">
+        <ShieldCheck className="w-4 h-4 text-brand-600 dark:text-cyan-400 shrink-0 mt-0.5" />
         <div className="leading-relaxed">
-          <strong className="font-semibold text-slate-900">Protected Course Stream: </strong>
-          Streaming session authorized for <code className="font-mono text-slate-900 font-bold">{student?.email}</code>. Content is dynamically watermarked under academic policy. Casual downloading and direct link sharing are restricted.
+          Protected training content. This session is personalized for the authenticated student.
         </div>
       </div>
     </div>

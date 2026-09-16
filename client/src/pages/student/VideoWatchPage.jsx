@@ -3,6 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../api/client.js';
 import YouTubePlayer from '../../components/video/YouTubePlayer.jsx';
+import GoogleDrivePlayer from '../../components/video/GoogleDrivePlayer.jsx';
+import VdoCipherPlayer from '../../components/video/VdoCipherPlayer.jsx';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -138,17 +140,47 @@ export default function VideoWatchPage() {
         </h1>
       </div>
 
-      {/* Official YouTube Embedded Player */}
-      <YouTubePlayer
-        videoId={playback.videoId}
-        duration={video.duration_seconds}
-        initialProgressSeconds={progress.progress_seconds}
-        onProgressUpdate={handleProgressUpdate}
-        privacyType={playback.privacyType}
-        disclaimer={playback.disclaimer}
-        student={user}
-        watermarkProfile={data?.watermarkProfile}
-      />
+      {/* Embedded Video Player (Google Drive MVP, VdoCipher DRM, or YouTube) */}
+      {playback.provider === 'vdocipher' ? (
+        <VdoCipherPlayer
+          videoId={playback.videoId}
+          otp={playback.otp}
+          playbackInfo={playback.playbackInfo}
+          embedUrl={playback.embedUrl}
+          title={video.title}
+          duration={video.duration_seconds}
+          initialCompleted={progress.completed}
+          initialProgressSeconds={progress.progress_seconds}
+          onProgressUpdate={handleProgressUpdate}
+          disclaimer={playback.disclaimer}
+          student={user}
+          watermarkProfile={data?.watermarkProfile}
+        />
+      ) : playback.provider === 'google_drive' ? (
+        <GoogleDrivePlayer
+          fileId={playback.fileId}
+          embedUrl={playback.embedUrl}
+          title={video.title}
+          duration={video.duration_seconds}
+          initialCompleted={progress.completed}
+          initialProgressSeconds={progress.progress_seconds}
+          onProgressUpdate={handleProgressUpdate}
+          disclaimer={playback.disclaimer}
+          student={user}
+          watermarkProfile={data?.watermarkProfile}
+        />
+      ) : (
+        <YouTubePlayer
+          videoId={playback.videoId}
+          duration={video.duration_seconds}
+          initialProgressSeconds={progress.progress_seconds}
+          onProgressUpdate={handleProgressUpdate}
+          privacyType={playback.privacyType}
+          disclaimer={playback.disclaimer}
+          student={user}
+          watermarkProfile={data?.watermarkProfile}
+        />
+      )}
 
       {/* Description & Navigation Footer */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">

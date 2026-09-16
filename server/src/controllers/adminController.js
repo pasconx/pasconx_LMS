@@ -394,9 +394,12 @@ export function createVideo(req, res, next) {
       title,
       description,
       course_id,
-      provider = 'youtube',
-      privacy_type = 'youtube_unlisted',
+      provider,
+      video_provider,
+      privacy_type,
       youtube_video_id,
+      drive_file_id,
+      external_video_id,
       duration_seconds = 0,
       order_index = 0,
       status = 'ACTIVE'
@@ -408,19 +411,85 @@ export function createVideo(req, res, next) {
     if (!course_id) {
       return res.status(400).json({ success: false, error: 'Course ID is required.' });
     }
-    if (!youtube_video_id || !youtube_video_id.trim()) {
-      return res.status(400).json({ success: false, error: 'YouTube Video ID is required.' });
+
+    const rawInput = (external_video_id || drive_file_id || youtube_video_id || '').trim();
+    if (!rawInput) {
+      return res.status(400).json({ success: false, error: 'Video ID or URL is required.' });
     }
 
-    // Validate YouTube Video ID using provider
-    const ytProvider = getVideoProvider('youtube');
-    const cleanVideoId = ytProvider.extractVideoId(youtube_video_id);
+    let inputProvider = (provider || video_provider || '').toLowerCase();
+    let selectedProvider = inputProvider;
+    let cleanVideoId = '';
+    let effectivePrivacy = privacy_type;
 
-    if (!cleanVideoId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid YouTube Video ID format. Please provide an 11-character video ID or valid YouTube URL.'
-      });
+    const vdoProvider = getVideoProvider('vdocipher');
+    const gdProvider = getVideoProvider('google_drive');
+    const ytProvider = getVideoProvider('youtube');
+
+    const detectedVdoId = vdoProvider.extractVideoId(rawInput);
+    const detectedGdId = gdProvider.extractFileId(rawInput);
+    const detectedYtId = ytProvider.extractVideoId(rawInput);
+
+    if (inputProvider === 'vdocipher') {
+      cleanVideoId = detectedVdoId || rawInput;
+      if (!vdoProvider.validateId(cleanVideoId)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid VdoCipher Video ID format. Please provide a valid 32-character hexadecimal video ID.'
+        });
+      }
+      effectivePrivacy = 'vdocipher_drm';
+    } else if (inputProvider === 'google_drive' || inputProvider === 'googledrive') {
+      cleanVideoId = detectedGdId || rawInput;
+      if (!cleanVideoId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid Google Drive File ID or URL. Please provide a valid File ID or Google Drive view/preview link.'
+        });
+      }
+      selectedProvider = 'google_drive';
+      effectivePrivacy = 'google_drive_preview';
+    } else if (inputProvider === 'youtube') {
+      if (detectedYtId) {
+        cleanVideoId = detectedYtId;
+        effectivePrivacy = privacy_type || 'youtube_unlisted';
+      } else if (detectedVdoId) {
+        selectedProvider = 'vdocipher';
+        cleanVideoId = detectedVdoId;
+        effectivePrivacy = 'vdocipher_drm';
+      } else if (detectedGdId) {
+        selectedProvider = 'google_drive';
+        cleanVideoId = detectedGdId;
+        effectivePrivacy = 'google_drive_preview';
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid YouTube Video ID format. Please provide an 11-character video ID or valid YouTube URL.'
+        });
+      }
+    } else {
+      if (detectedVdoId) {
+        selectedProvider = 'vdocipher';
+        cleanVideoId = detectedVdoId;
+        effectivePrivacy = 'vdocipher_drm';
+      } else if (detectedGdId && (rawInput.includes('drive.google.com') || rawInput.includes('docs.google.com'))) {
+        selectedProvider = 'google_drive';
+        cleanVideoId = detectedGdId;
+        effectivePrivacy = 'google_drive_preview';
+      } else if (detectedYtId) {
+        selectedProvider = 'youtube';
+        cleanVideoId = detectedYtId;
+        effectivePrivacy = privacy_type || 'youtube_unlisted';
+      } else if (detectedGdId) {
+        selectedProvider = 'google_drive';
+        cleanVideoId = detectedGdId;
+        effectivePrivacy = 'google_drive_preview';
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid Video ID or URL format.'
+        });
+      }
     }
 
     // Check course exists
@@ -431,16 +500,18 @@ export function createVideo(req, res, next) {
 
     const stmt = db.prepare(`
       INSERT INTO videos (
-        course_id, title, description, provider, privacy_type, external_video_id, duration_seconds, order_index, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        course_id, title, description, provider, video_provider, privacy_type, external_video_id, drive_file_id, duration_seconds, order_index, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
       Number(course_id),
       title.trim(),
       description ? description.trim() : '',
-      provider,
-      privacy_type,
+      selectedProvider,
+      selectedProvider,
+      effectivePrivacy,
+      cleanVideoId,
       cleanVideoId,
       parseInt(duration_seconds, 10) || 0,
       parseInt(order_index, 10) || 0,
@@ -449,9 +520,9 @@ export function createVideo(req, res, next) {
 
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(result.lastInsertRowid);
 
-    const warning = privacy_type === 'youtube_private'
-      ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or integrate VdoCipher later.'
-      : null;
+    const warning = selectedProvider === 'google_drive'
+      ? 'Google Drive is being used only as an MVP video source. Google Drive does not provide DRM or guaranteed protection against video downloading or sharing. For production-grade protected training videos, migrate the video provider to VdoCipher or another secure video streaming/DRM provider.'
+      : (effectivePrivacy === 'youtube_private' ? 'Private YouTube videos require YouTube viewer authorization.' : null);
 
     return res.status(201).json({
       success: true,
@@ -471,9 +542,12 @@ export function updateVideo(req, res, next) {
       title,
       description,
       course_id,
-      provider = 'youtube',
-      privacy_type = 'youtube_unlisted',
+      provider,
+      video_provider,
+      privacy_type,
       youtube_video_id,
+      drive_file_id,
+      external_video_id,
       duration_seconds = 0,
       order_index = 0,
       status = 'ACTIVE'
@@ -484,14 +558,73 @@ export function updateVideo(req, res, next) {
       return res.status(404).json({ success: false, error: 'Video not found.' });
     }
 
-    const ytProvider = getVideoProvider('youtube');
-    const cleanVideoId = youtube_video_id ? ytProvider.extractVideoId(youtube_video_id) : existing.external_video_id;
+    let inputProvider = (provider || video_provider || existing.provider || 'vdocipher').toLowerCase();
+    let selectedProvider = inputProvider;
+    let cleanVideoId = existing.external_video_id || existing.drive_file_id;
+    let effectivePrivacy = privacy_type || existing.privacy_type;
 
-    if (!cleanVideoId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid YouTube Video ID format.'
-      });
+    const rawInput = (drive_file_id || external_video_id || youtube_video_id || '').trim();
+
+    if (rawInput) {
+      const vdoProvider = getVideoProvider('vdocipher');
+      const gdProvider = getVideoProvider('google_drive');
+      const ytProvider = getVideoProvider('youtube');
+
+      const detectedVdoId = vdoProvider.extractVideoId(rawInput);
+      const detectedGdId = gdProvider.extractFileId(rawInput);
+      const detectedYtId = ytProvider.extractVideoId(rawInput);
+
+      if (inputProvider === 'vdocipher') {
+        cleanVideoId = detectedVdoId || rawInput;
+        if (!vdoProvider.validateId(cleanVideoId)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid VdoCipher Video ID format. Please provide a valid 32-character hexadecimal video ID.'
+          });
+        }
+        effectivePrivacy = 'vdocipher_drm';
+      } else if (inputProvider === 'google_drive' || inputProvider === 'googledrive') {
+        cleanVideoId = detectedGdId || rawInput;
+        if (!cleanVideoId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid Google Drive File ID or URL.'
+          });
+        }
+        selectedProvider = 'google_drive';
+        effectivePrivacy = 'google_drive_preview';
+      } else if (inputProvider === 'youtube') {
+        if (detectedYtId) {
+          cleanVideoId = detectedYtId;
+          effectivePrivacy = privacy_type || 'youtube_unlisted';
+        } else if (detectedVdoId) {
+          selectedProvider = 'vdocipher';
+          cleanVideoId = detectedVdoId;
+          effectivePrivacy = 'vdocipher_drm';
+        } else if (detectedGdId) {
+          selectedProvider = 'google_drive';
+          cleanVideoId = detectedGdId;
+          effectivePrivacy = 'google_drive_preview';
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid YouTube Video ID format.'
+          });
+        }
+      } else {
+        if (detectedVdoId) {
+          selectedProvider = 'vdocipher';
+          cleanVideoId = detectedVdoId;
+          effectivePrivacy = 'vdocipher_drm';
+        } else if (detectedGdId) {
+          selectedProvider = 'google_drive';
+          cleanVideoId = detectedGdId;
+          effectivePrivacy = 'google_drive_preview';
+        } else if (detectedYtId) {
+          selectedProvider = 'youtube';
+          cleanVideoId = detectedYtId;
+        }
+      }
     }
 
     const stmt = db.prepare(`
@@ -500,8 +633,10 @@ export function updateVideo(req, res, next) {
         description = ?,
         course_id = ?,
         provider = ?,
+        video_provider = ?,
         privacy_type = ?,
         external_video_id = ?,
+        drive_file_id = ?,
         duration_seconds = ?,
         order_index = ?,
         status = ?,
@@ -513,8 +648,10 @@ export function updateVideo(req, res, next) {
       title ? title.trim() : existing.title,
       description !== undefined ? description.trim() : existing.description,
       course_id ? Number(course_id) : existing.course_id,
-      provider || existing.provider,
-      privacy_type || existing.privacy_type,
+      selectedProvider,
+      selectedProvider,
+      effectivePrivacy,
+      cleanVideoId,
       cleanVideoId,
       duration_seconds !== undefined ? parseInt(duration_seconds, 10) : existing.duration_seconds,
       order_index !== undefined ? parseInt(order_index, 10) : existing.order_index,
@@ -525,7 +662,7 @@ export function updateVideo(req, res, next) {
     const updated = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId);
 
     const warning = updated.privacy_type === 'youtube_private'
-      ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or integrate VdoCipher later.'
+      ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use Google Drive or VdoCipher.'
       : null;
 
     return res.json({

@@ -79,18 +79,22 @@ export async function seed() {
 
   // 3. Create Videos for Courses
   const insertVideo = db.prepare(`
-    INSERT INTO videos (course_id, title, description, provider, privacy_type, external_video_id, duration_seconds, order_index, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO videos (course_id, title, description, provider, video_provider, privacy_type, external_video_id, drive_file_id, duration_seconds, order_index, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Videos for "PASCONX Demo Course"
+  // Videos for "PASCONX Demo Course" - User provided public Google Drive link
+  const PUBLIC_DRIVE_FILE_ID = '1fkJOdRIonDNO4YYDSno_0hwcBvlcMbMy';
+
   const v1 = insertVideo.run(
     courseDemo,
-    '01 Introduction to PASCONX',
-    'Welcome to the PASCONX learning portal. Learn how to navigate your courses and study materials.',
-    'youtube',
-    'youtube_unlisted',
-    'dQw4w9WgXcQ',
+    '01 Introduction to PASCONX Training Lecture',
+    'Welcome to the PASCONX learning portal. Watch this official Google Drive training session.',
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
     360,
     1,
     'ACTIVE'
@@ -100,9 +104,11 @@ export async function seed() {
     courseDemo,
     '02 Getting Started & Course Setup',
     'Step-by-step guidance on setting up your environment, required tools, and development workspace.',
-    'youtube',
-    'youtube_unlisted',
-    'L_LUpnjgPso',
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
     720,
     2,
     'ACTIVE'
@@ -112,9 +118,11 @@ export async function seed() {
     courseDemo,
     '03 Final Lesson & Practical Assessment',
     'Review key learning outcomes, best practices, and next steps for advanced certification.',
-    'youtube',
-    'youtube_unlisted',
-    'kXYiU_JCYtU',
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
     540,
     3,
     'ACTIVE'
@@ -125,9 +133,11 @@ export async function seed() {
     courseCyber,
     '01 Introduction to Modern Cybersecurity',
     'Core principles of confidentiality, integrity, and availability (CIA triad).',
-    'youtube',
-    'youtube_unlisted',
-    'inWWhr5tnEA',
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
     1500,
     1,
     'ACTIVE'
@@ -137,10 +147,12 @@ export async function seed() {
     courseCyber,
     '02 Network Security & Defense In Depth',
     'Understanding firewalls, IDS/IPS, network segmentation, and zero trust models.',
-    'youtube',
-    'youtube_unlisted',
-    '3Kq1MIfTWCE',
-    2520,
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
+    1800,
     2,
     'ACTIVE'
   ).lastInsertRowid;
@@ -149,9 +161,11 @@ export async function seed() {
     courseCyber,
     '03 Web Application Security',
     'OWASP Top 10 vulnerabilities, injection attacks, cross-site scripting, and secure headers.',
-    'youtube',
-    'youtube_unlisted',
-    '2_lswM1S264',
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
     2100,
     3,
     'ACTIVE'
@@ -162,9 +176,11 @@ export async function seed() {
     courseExpired,
     'Archived Overview',
     'Course access has expired.',
-    'youtube',
-    'youtube_unlisted',
-    'dQw4w9WgXcQ',
+    'google_drive',
+    'google_drive',
+    'google_drive_preview',
+    PUBLIC_DRIVE_FILE_ID,
+    PUBLIC_DRIVE_FILE_ID,
     600,
     1,
     'ACTIVE'

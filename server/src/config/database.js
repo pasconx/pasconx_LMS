@@ -49,10 +49,14 @@ export function initDatabase() {
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT,
-      provider TEXT NOT NULL DEFAULT 'youtube',
-      privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK(privacy_type IN ('youtube_unlisted', 'youtube_private')),
-      external_video_id TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'google_drive',
+      video_provider TEXT DEFAULT 'google_drive',
+      privacy_type TEXT NOT NULL DEFAULT 'google_drive_preview',
+      external_video_id TEXT,
+      drive_file_id TEXT,
       duration_seconds INTEGER DEFAULT 0,
+      duration TEXT,
+      thumbnail TEXT,
       order_index INTEGER DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -117,5 +121,25 @@ export function initDatabase() {
   `;
 
   db.exec(initStatements);
+
+  // Safe schema migrations for existing databases
+  try {
+    const columns = db.pragma('table_info(videos)').map(c => c.name);
+    if (!columns.includes('drive_file_id')) {
+      db.exec(`ALTER TABLE videos ADD COLUMN drive_file_id TEXT;`);
+    }
+    if (!columns.includes('video_provider')) {
+      db.exec(`ALTER TABLE videos ADD COLUMN video_provider TEXT DEFAULT 'google_drive';`);
+    }
+    if (!columns.includes('thumbnail')) {
+      db.exec(`ALTER TABLE videos ADD COLUMN thumbnail TEXT;`);
+    }
+    if (!columns.includes('duration')) {
+      db.exec(`ALTER TABLE videos ADD COLUMN duration TEXT;`);
+    }
+  } catch (err) {
+    console.warn('Database schema migration note:', err.message);
+  }
+
   return db;
 }
