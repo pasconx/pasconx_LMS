@@ -30,6 +30,7 @@ router.get('/courses/:courseId/documents/:docId/view', checkDocumentAccess, stre
 
 // Specific video playback payload (authorized by checkVideoAccess)
 router.get('/videos/:videoId', checkVideoAccess, getStudentVideoPlayback);
+router.get('/videos/:videoId/play', checkVideoAccess, getStudentVideoPlayback);
 
 // Progress tracking update (authorized by checkVideoAccess)
 router.post('/videos/:videoId/progress', checkVideoAccess, updateStudentVideoProgress);

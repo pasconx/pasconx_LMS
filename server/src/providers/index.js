@@ -1,9 +1,11 @@
 import { YouTubeProvider } from './YouTubeProvider.js';
 import { VdoCipherProvider } from './VdoCipherProvider.js';
+import { WidevineProvider } from './WidevineProvider.js';
 
 const providers = {
   youtube: new YouTubeProvider(),
-  vdocipher: new VdoCipherProvider()
+  vdocipher: new VdoCipherProvider(),
+  widevine: new WidevineProvider()
 };
 
 /**
@@ -15,9 +17,10 @@ export function getVideoProvider(name) {
   const providerKey = (name || process.env.VIDEO_PROVIDER || 'youtube').toLowerCase();
   const provider = providers[providerKey];
   if (!provider) {
-    throw new Error(`Unsupported video provider: "${providerKey}". Supported providers: youtube, vdocipher`);
+    throw new Error(`Unsupported video provider: "${providerKey}". Supported providers: youtube, widevine, vdocipher`);
   }
   return provider;
 }
 
-export { YouTubeProvider, VdoCipherProvider };
+export { YouTubeProvider, VdoCipherProvider, WidevineProvider };
+

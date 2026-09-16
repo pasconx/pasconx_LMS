@@ -107,6 +107,7 @@ export function getStudentCourseDetail(req, res, next) {
         v.course_id,
         v.title,
         v.description,
+        v.video_type,
         v.duration_seconds,
         v.order_index,
         COALESCE(vp.progress_seconds, 0) AS progress_seconds,
@@ -185,8 +186,10 @@ export async function getStudentVideoPlayback(req, res, next) {
       details: { courseId: video.course_id, videoTitle: video.title }
     });
 
-    // Get playback config from the configured provider
-    const provider = getVideoProvider(video.provider);
+    // Determine video type & provider (preserving default 'youtube')
+    const videoType = video.video_type || (video.provider === 'widevine' ? 'widevine' : 'youtube');
+    const providerKey = videoType === 'widevine' ? 'widevine' : (video.provider || 'youtube');
+    const provider = getVideoProvider(providerKey);
     const playbackConfig = await provider.getPlaybackConfig(video, req.user);
 
     // Get existing progress
@@ -218,6 +221,8 @@ export async function getStudentVideoPlayback(req, res, next) {
         course_title: video.course_title,
         title: video.title,
         description: video.description,
+        video_type: videoType,
+        manifest_url: video.manifest_url,
         duration_seconds: video.duration_seconds,
         order_index: video.order_index,
         access_expiry: enrollment.access_expiry

@@ -363,35 +363,35 @@ export default function GoogleDrivePlayer({
       </div>
 
       {/* Status Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors">
         <div className="w-full sm:w-auto flex-1 flex items-center gap-3">
           <button
             onClick={handleToggleCompleted}
             disabled={isUpdating}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shadow-xs cursor-pointer ${
               completed
-                ? 'bg-emerald-600/20 text-emerald-700 border border-emerald-500/40 hover:bg-emerald-600/30'
+                ? 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30'
                 : 'bg-brand-600 text-white hover:bg-brand-500'
             }`}
           >
-            <CheckCircle2 className={`w-4 h-4 ${completed ? 'text-emerald-600' : 'text-white'}`} />
+            <CheckCircle2 className={`w-4 h-4 ${completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-white'}`} />
             <span>{completed ? 'Lesson Completed' : 'Mark as Completed'}</span>
           </button>
 
           <div className="flex-1">
-            <div className="flex justify-between items-center text-xs font-semibold text-slate-700 mb-1">
+            <div className="flex justify-between items-center text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-brand-600" />
-                Progress: <strong className="text-slate-900">{Math.round(progressPercent)}%</strong>
+                <Clock className="w-3.5 h-3.5 text-brand-600 dark:text-cyan-400" />
+                Progress: <strong className="text-slate-900 dark:text-white">{Math.round(progressPercent)}%</strong>
               </span>
-              <span className="text-slate-500 font-mono text-[11px]">
+              <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                 {formatTime(currentSeconds)} / {formatTime(videoDuration)}
               </span>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
               <div
                 className={`h-2 transition-all duration-300 rounded-full ${
-                  completed ? 'bg-emerald-500' : 'bg-brand-600'
+                  completed ? 'bg-emerald-500' : 'bg-brand-600 dark:bg-cyan-400'
                 }`}
                 style={{ width: `${progressPercent}%` }}
               />

@@ -394,9 +394,12 @@ export function createVideo(req, res, next) {
       title,
       description,
       course_id,
+      video_type = 'youtube',
       provider = 'youtube',
       privacy_type = 'youtube_unlisted',
       youtube_video_id,
+      manifest_url,
+      license_server_url,
       duration_seconds = 0,
       order_index = 0,
       status = 'ACTIVE'
@@ -408,20 +411,6 @@ export function createVideo(req, res, next) {
     if (!course_id) {
       return res.status(400).json({ success: false, error: 'Course ID is required.' });
     }
-    if (!youtube_video_id || !youtube_video_id.trim()) {
-      return res.status(400).json({ success: false, error: 'YouTube Video ID is required.' });
-    }
-
-    // Validate YouTube Video ID using provider
-    const ytProvider = getVideoProvider('youtube');
-    const cleanVideoId = ytProvider.extractVideoId(youtube_video_id);
-
-    if (!cleanVideoId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid YouTube Video ID format. Please provide an 11-character video ID or valid YouTube URL.'
-      });
-    }
 
     // Check course exists
     const course = db.prepare('SELECT id FROM courses WHERE id = ?').get(Number(course_id));
@@ -429,19 +418,63 @@ export function createVideo(req, res, next) {
       return res.status(404).json({ success: false, error: 'Selected course does not exist.' });
     }
 
+    let cleanVideoId = '';
+    let resolvedProvider = provider;
+    let resolvedPrivacyType = privacy_type;
+
+    if (video_type === 'widevine') {
+      resolvedProvider = 'widevine';
+      resolvedPrivacyType = 'widevine_drm';
+
+      if (!manifest_url || !manifest_url.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'DASH Manifest URL (.mpd) is required for Widevine DRM videos.'
+        });
+      }
+
+      const wvProvider = getVideoProvider('widevine');
+      if (!wvProvider.validateManifest(manifest_url.trim())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid DASH manifest URL. Must be a valid URL pointing to a DASH manifest or .mpd resource.'
+        });
+      }
+
+      cleanVideoId = (req.body.external_video_id || youtube_video_id || `wv-${Date.now()}`).trim();
+    } else {
+      // Default / YouTube validation
+      if (!youtube_video_id || !youtube_video_id.trim()) {
+        return res.status(400).json({ success: false, error: 'YouTube Video ID is required.' });
+      }
+
+      const ytProvider = getVideoProvider('youtube');
+      cleanVideoId = ytProvider.extractVideoId(youtube_video_id);
+
+      if (!cleanVideoId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid YouTube Video ID format. Please provide an 11-character video ID or valid YouTube URL.'
+        });
+      }
+    }
+
     const stmt = db.prepare(`
       INSERT INTO videos (
-        course_id, title, description, provider, privacy_type, external_video_id, duration_seconds, order_index, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        course_id, title, description, video_type, provider, privacy_type, external_video_id, manifest_url, license_server_url, duration_seconds, order_index, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
       Number(course_id),
       title.trim(),
       description ? description.trim() : '',
-      provider,
-      privacy_type,
+      video_type,
+      resolvedProvider,
+      resolvedPrivacyType,
       cleanVideoId,
+      manifest_url ? manifest_url.trim() : null,
+      license_server_url ? license_server_url.trim() : null,
       parseInt(duration_seconds, 10) || 0,
       parseInt(order_index, 10) || 0,
       status
@@ -449,13 +482,14 @@ export function createVideo(req, res, next) {
 
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(result.lastInsertRowid);
 
-    const warning = privacy_type === 'youtube_private'
-      ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or integrate VdoCipher later.'
-      : null;
+    let warning = null;
+    if (video_type === 'youtube' && privacy_type === 'youtube_private') {
+      warning = 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or Widevine DRM.';
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'Video added successfully.',
+      message: `${video_type === 'widevine' ? 'Widevine DRM protected video' : 'YouTube video'} added successfully.`,
       warning,
       video
     });
@@ -471,9 +505,12 @@ export function updateVideo(req, res, next) {
       title,
       description,
       course_id,
-      provider = 'youtube',
-      privacy_type = 'youtube_unlisted',
+      video_type,
+      provider,
+      privacy_type,
       youtube_video_id,
+      manifest_url,
+      license_server_url,
       duration_seconds = 0,
       order_index = 0,
       status = 'ACTIVE'
@@ -484,14 +521,37 @@ export function updateVideo(req, res, next) {
       return res.status(404).json({ success: false, error: 'Video not found.' });
     }
 
-    const ytProvider = getVideoProvider('youtube');
-    const cleanVideoId = youtube_video_id ? ytProvider.extractVideoId(youtube_video_id) : existing.external_video_id;
+    const targetVideoType = video_type || existing.video_type || 'youtube';
+    let cleanVideoId = existing.external_video_id;
+    let resolvedProvider = provider || existing.provider;
+    let resolvedPrivacyType = privacy_type || existing.privacy_type;
 
-    if (!cleanVideoId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid YouTube Video ID format.'
-      });
+    if (targetVideoType === 'widevine') {
+      resolvedProvider = 'widevine';
+      resolvedPrivacyType = 'widevine_drm';
+
+      const targetManifest = manifest_url !== undefined ? manifest_url : existing.manifest_url;
+      if (!targetManifest || !targetManifest.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'DASH Manifest URL (.mpd) is required for Widevine DRM videos.'
+        });
+      }
+
+      if (req.body.external_video_id) {
+        cleanVideoId = req.body.external_video_id.trim();
+      }
+    } else {
+      if (youtube_video_id) {
+        const ytProvider = getVideoProvider('youtube');
+        cleanVideoId = ytProvider.extractVideoId(youtube_video_id);
+        if (!cleanVideoId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid YouTube Video ID format.'
+          });
+        }
+      }
     }
 
     const stmt = db.prepare(`
@@ -499,9 +559,12 @@ export function updateVideo(req, res, next) {
         title = ?,
         description = ?,
         course_id = ?,
+        video_type = ?,
         provider = ?,
         privacy_type = ?,
         external_video_id = ?,
+        manifest_url = ?,
+        license_server_url = ?,
         duration_seconds = ?,
         order_index = ?,
         status = ?,
@@ -513,9 +576,12 @@ export function updateVideo(req, res, next) {
       title ? title.trim() : existing.title,
       description !== undefined ? description.trim() : existing.description,
       course_id ? Number(course_id) : existing.course_id,
-      provider || existing.provider,
-      privacy_type || existing.privacy_type,
+      targetVideoType,
+      resolvedProvider,
+      resolvedPrivacyType,
       cleanVideoId,
+      manifest_url !== undefined ? (manifest_url ? manifest_url.trim() : null) : existing.manifest_url,
+      license_server_url !== undefined ? (license_server_url ? license_server_url.trim() : null) : existing.license_server_url,
       duration_seconds !== undefined ? parseInt(duration_seconds, 10) : existing.duration_seconds,
       order_index !== undefined ? parseInt(order_index, 10) : existing.order_index,
       status || existing.status,
@@ -525,7 +591,7 @@ export function updateVideo(req, res, next) {
     const updated = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId);
 
     const warning = updated.privacy_type === 'youtube_private'
-      ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or integrate VdoCipher later.'
+      ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or Widevine DRM.'
       : null;
 
     return res.json({

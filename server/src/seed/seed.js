@@ -79,8 +79,9 @@ export async function seed() {
 
   // 3. Create Videos for Courses
   const insertVideo = db.prepare(`
-    INSERT INTO videos (course_id, title, description, provider, privacy_type, external_video_id, duration_seconds, order_index, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO videos (
+      course_id, title, description, video_type, provider, privacy_type, external_video_id, manifest_url, license_server_url, duration_seconds, order_index, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   // Videos for "PASCONX Demo Course"
@@ -89,8 +90,11 @@ export async function seed() {
     '01 Introduction to PASCONX',
     'Welcome to the PASCONX learning portal. Learn how to navigate your courses and study materials.',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     'dQw4w9WgXcQ',
+    null,
+    null,
     360,
     1,
     'ACTIVE'
@@ -101,8 +105,11 @@ export async function seed() {
     '02 Getting Started & Course Setup',
     'Step-by-step guidance on setting up your environment, required tools, and development workspace.',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     'L_LUpnjgPso',
+    null,
+    null,
     720,
     2,
     'ACTIVE'
@@ -113,8 +120,11 @@ export async function seed() {
     '03 Final Lesson & Practical Assessment',
     'Review key learning outcomes, best practices, and next steps for advanced certification.',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     'kXYiU_JCYtU',
+    null,
+    null,
     540,
     3,
     'ACTIVE'
@@ -126,8 +136,11 @@ export async function seed() {
     '01 Introduction to Modern Cybersecurity',
     'Core principles of confidentiality, integrity, and availability (CIA triad).',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     'inWWhr5tnEA',
+    null,
+    null,
     1500,
     1,
     'ACTIVE'
@@ -138,8 +151,11 @@ export async function seed() {
     '02 Network Security & Defense In Depth',
     'Understanding firewalls, IDS/IPS, network segmentation, and zero trust models.',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     '3Kq1MIfTWCE',
+    null,
+    null,
     2520,
     2,
     'ACTIVE'
@@ -150,10 +166,29 @@ export async function seed() {
     '03 Web Application Security',
     'OWASP Top 10 vulnerabilities, injection attacks, cross-site scripting, and secure headers.',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     '2_lswM1S264',
+    null,
+    null,
     2100,
     3,
+    'ACTIVE'
+  ).lastInsertRowid;
+
+  // Sample Widevine DRM Protected Video (Coexisting with YouTube videos)
+  const cV4 = insertVideo.run(
+    courseCyber,
+    '04 Advanced Threat Defense (Widevine DRM)',
+    'Premium module: Cloud defense architecture, hardware enclave security, and DRM cryptographic pipeline.',
+    'widevine',
+    'widevine',
+    'widevine_drm',
+    'px-drm-cyber-04',
+    'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd',
+    'https://cwip-shaka-drm.appspot.com/no_auth',
+    1800,
+    4,
     'ACTIVE'
   ).lastInsertRowid;
 
@@ -163,8 +198,11 @@ export async function seed() {
     'Archived Overview',
     'Course access has expired.',
     'youtube',
+    'youtube',
     'youtube_unlisted',
     'dQw4w9WgXcQ',
+    null,
+    null,
     600,
     1,
     'ACTIVE'

@@ -136,11 +136,11 @@ export default function StudentsManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-indigo-600" />
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5 transition-colors">
+            <Users className="w-6 h-6 text-indigo-600 dark:text-cyan-400" />
             Student Accounts Management
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors">
             Create student credentials, toggle account status, and administer learning permissions.
           </p>
         </div>
@@ -162,32 +162,32 @@ export default function StudentsManagement() {
         <div
           className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
             notification.type === 'error'
-              ? 'bg-rose-50 text-rose-800 border border-rose-200'
-              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60'
+              : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60'
           }`}
         >
-          {notification.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+          <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{notification.message}</span>
         </div>
       )}
 
       {/* Filter / Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3">
-        <Search className="w-4 h-4 text-slate-400" />
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs flex items-center gap-3 transition-colors">
+        <Search className="w-4 h-4 text-slate-400 dark:text-slate-500" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search students by name or email..."
-          className="w-full text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
+          className="w-full text-xs text-slate-900 dark:text-white bg-transparent placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
         />
       </div>
 
       {/* Students Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden transition-colors">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+          <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3.5 px-4 text-left">Name</th>
                 <th className="py-3.5 px-4 text-left">Email</th>
@@ -197,32 +197,32 @@ export default function StudentsManagement() {
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="py-10 text-center text-slate-400">
+                  <td colSpan="6" className="py-10 text-center text-slate-400 dark:text-slate-500">
                     Loading registered student roster...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="py-10 text-center text-slate-400">
+                  <td colSpan="6" className="py-10 text-center text-slate-400 dark:text-slate-500">
                     No matching student accounts found.
                   </td>
                 </tr>
               ) : (
                 filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">{s.name}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600">{s.email}</td>
+                  <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{s.name}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{s.email}</td>
                     <td className="py-3.5 px-4">
                       <StatusBadge status={s.status} />
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="font-semibold text-slate-800">{s.active_courses_count}</span>
-                      <span className="text-slate-400 text-[11px]"> / {s.total_courses_count}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{s.active_courses_count}</span>
+                      <span className="text-slate-400 dark:text-slate-500 text-[11px]"> / {s.total_courses_count}</span>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-500">
+                    <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">
                       {new Date(s.created_at).toLocaleDateString('en-GB')}
                     </td>
                     <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
@@ -232,7 +232,7 @@ export default function StudentsManagement() {
                           setFormData({ name: s.name, email: s.email, password: '' });
                           setIsEditOpen(true);
                         }}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
                         title="Edit Student"
                       >
                         <Edit className="w-3.5 h-3.5" />
@@ -242,8 +242,8 @@ export default function StudentsManagement() {
                         onClick={() => handleToggleStatus(s)}
                         className={`p-1.5 rounded-lg border transition-colors ${
                           s.status === 'ACTIVE'
-                            ? 'border-rose-200 text-rose-600 hover:bg-rose-50'
-                            : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+                            ? 'border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                            : 'border-emerald-200 dark:border-emerald-900/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
                         }`}
                         title={s.status === 'ACTIVE' ? 'Disable Student Account' : 'Enable Student Account'}
                       >
@@ -256,7 +256,7 @@ export default function StudentsManagement() {
                           setNewPassword('');
                           setIsResetOpen(true);
                         }}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
                         title="Reset Password"
                       >
                         <Key className="w-3.5 h-3.5" />

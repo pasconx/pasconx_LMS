@@ -109,11 +109,11 @@ export default function CoursesManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <BookOpen className="w-6 h-6 text-indigo-600" />
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5 transition-colors">
+            <BookOpen className="w-6 h-6 text-indigo-600 dark:text-cyan-400" />
             Course Curriculum Management
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors">
             Design institute course modules, configure thumbnails, and attach instructional video series.
           </p>
         </div>
@@ -123,7 +123,7 @@ export default function CoursesManagement() {
             setFormData({ title: '', description: '', thumbnail_url: '', status: 'ACTIVE' });
             setIsCreateOpen(true);
           }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:bg-cyan-600 dark:hover:bg-cyan-700 text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
         >
           <PlusCircle className="w-4 h-4" />
           Create Course
@@ -134,34 +134,38 @@ export default function CoursesManagement() {
         <div
           className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
             notification.type === 'error'
-              ? 'bg-rose-50 text-rose-800 border border-rose-200'
-              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60'
+              : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60'
           }`}
         >
-          {notification.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+          <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{notification.message}</span>
         </div>
       )}
 
-      {/* Course Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          <div className="col-span-full py-12 text-center text-slate-400 text-xs">
-            Loading courses catalog...
-          </div>
-        ) : courses.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-slate-400 text-xs">
-            No courses found. Click "+ Create Course" to add the first one.
-          </div>
-        ) : (
-          courses.map((course) => (
+      {/* Courses Grid */}
+      {loading ? (
+        <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-xs">
+          Loading course catalog...
+        </div>
+      ) : courses.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-500 dark:text-slate-400 space-y-3">
+          <BookOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+          <div className="text-sm font-bold text-slate-700 dark:text-slate-200">No courses created yet</div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
+            Get started by creating your first course and organizing educational videos for your students.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {courses.map((course) => (
             <div
               key={course.id}
-              className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
             >
               <div>
                 {/* Thumbnail */}
-                <div className="h-40 w-full bg-slate-100 overflow-hidden relative">
+                <div className="h-40 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
                   {course.thumbnail_url ? (
                     <img
                       src={course.thumbnail_url}
@@ -169,7 +173,7 @@ export default function CoursesManagement() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold text-lg">
+                    <div className="w-full h-full flex items-center justify-center bg-slate-800 dark:bg-slate-900 text-white font-bold text-lg">
                       {course.title.substring(0, 2).toUpperCase()}
                     </div>
                   )}
@@ -180,20 +184,20 @@ export default function CoursesManagement() {
 
                 {/* Content */}
                 <div className="p-5 space-y-3">
-                  <h3 className="text-base font-bold text-slate-900 leading-snug">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
                     {course.title}
                   </h3>
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                     {course.description || 'No course description provided.'}
                   </p>
 
-                  <div className="pt-2 flex items-center gap-4 text-xs text-slate-500 font-medium">
+                  <div className="pt-2 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 font-medium">
                     <span className="flex items-center gap-1">
-                      <Video className="w-3.5 h-3.5 text-indigo-600" />
+                      <Video className="w-3.5 h-3.5 text-indigo-600 dark:text-cyan-400" />
                       {course.total_videos} Videos
                     </span>
                     <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-purple-600" />
+                      <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                       {course.active_enrollments} Active Students
                     </span>
                   </div>
@@ -201,10 +205,10 @@ export default function CoursesManagement() {
               </div>
 
               {/* Actions Footer */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                 <Link
                   to={`/admin/videos?courseId=${course.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-cyan-400 hover:text-indigo-800 dark:hover:text-cyan-300"
                 >
                   <Video className="w-3.5 h-3.5" />
                   Manage Videos ({course.total_videos})
@@ -238,9 +242,9 @@ export default function CoursesManagement() {
                 </div>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Create Course Modal */}
       <Modal

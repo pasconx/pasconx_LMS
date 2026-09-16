@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../api/client.js';
-import YouTubePlayer from '../../components/video/YouTubePlayer.jsx';
+import SecureVideoPlayer from '../../components/video/SecureVideoPlayer.jsx';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -115,14 +115,14 @@ export default function VideoWatchPage() {
       <div className="flex items-center justify-between">
         <Link
           to={`/student/courses/${video.course_id}`}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-brand-600 transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-cyan-400 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           ← Back to Course
         </Link>
 
         {saveStatus && (
-          <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 animate-pulse">
+          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 animate-pulse">
             {saveStatus}
           </span>
         )}
@@ -130,41 +130,39 @@ export default function VideoWatchPage() {
 
       {/* Course & Video Header */}
       <div className="space-y-1">
-        <div className="text-xs font-bold text-brand-600 uppercase tracking-wider">
+        <div className="text-xs font-bold text-brand-600 dark:text-cyan-400 uppercase tracking-wider">
           {video.course_title}
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
           {video.title}
         </h1>
       </div>
 
-      {/* Official YouTube Embedded Player */}
-      <YouTubePlayer
-        videoId={playback.videoId}
-        duration={video.duration_seconds}
-        initialProgressSeconds={progress.progress_seconds}
+      {/* Unified Secure Video Player (Routes to YouTube or Widevine DRM) */}
+      <SecureVideoPlayer
+        video={video}
+        playback={playback}
+        progress={progress}
         onProgressUpdate={handleProgressUpdate}
-        privacyType={playback.privacyType}
-        disclaimer={playback.disclaimer}
         student={user}
         watermarkProfile={data?.watermarkProfile}
       />
 
       {/* Description & Navigation Footer */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6 transition-colors">
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">About This Session</h3>
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">About This Session</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
             {video.description || 'No additional lesson notes provided for this video.'}
           </p>
         </div>
 
         {/* Previous & Next Navigation Controls */}
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
           {navigation.prevVideo ? (
             <Link
               to={`/student/watch/${navigation.prevVideo.id}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Previous: {navigation.prevVideo.title}</span>
@@ -181,7 +179,7 @@ export default function VideoWatchPage() {
               <span>Next Video →</span>
             </Link>
           ) : (
-            <div className="text-xs text-slate-400 font-medium italic">
+            <div className="text-xs text-slate-400 dark:text-slate-500 font-medium italic">
               End of course modules
             </div>
           )}

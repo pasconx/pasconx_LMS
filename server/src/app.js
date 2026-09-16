@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/authRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import drmRoutes from './routes/drmRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { initDatabase } from './config/database.js';
@@ -72,6 +73,13 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/drm', drmRoutes);
+
+// Direct playback authorization alias: GET /api/videos/:videoId/play
+app.get('/api/videos/:videoId/play', (req, res, next) => {
+  req.url = `/videos/${req.params.videoId}/play`;
+  return studentRoutes(req, res, next);
+});
 
 // Serve client production build if available
 if (fs.existsSync(clientDist)) {

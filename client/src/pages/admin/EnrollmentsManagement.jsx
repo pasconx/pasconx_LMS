@@ -137,11 +137,11 @@ export default function EnrollmentsManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <KeyRound className="w-6 h-6 text-indigo-600" />
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5 transition-colors">
+            <KeyRound className="w-6 h-6 text-indigo-600 dark:text-cyan-400" />
             Course Enrollment & Access Control
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors">
             Assign courses to registered students, define access validities, and extend expiration deadlines.
           </p>
         </div>
@@ -168,20 +168,20 @@ export default function EnrollmentsManagement() {
         <div
           className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
             notification.type === 'error'
-              ? 'bg-rose-50 text-rose-800 border border-rose-200'
-              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60'
+              : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60'
           }`}
         >
-          {notification.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+          <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{notification.message}</span>
         </div>
       )}
 
       {/* Enrollments Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden transition-colors">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+          <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3.5 px-4 text-left">Student</th>
                 <th className="py-3.5 px-4 text-left">Course</th>
@@ -190,34 +190,34 @@ export default function EnrollmentsManagement() {
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="py-10 text-center text-slate-400">
+                  <td colSpan="5" className="py-10 text-center text-slate-400 dark:text-slate-500">
                     Loading enrollments...
                   </td>
                 </tr>
               ) : enrollments.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="py-10 text-center text-slate-400">
+                  <td colSpan="5" className="py-10 text-center text-slate-400 dark:text-slate-500">
                     No active student enrollments found.
                   </td>
                 </tr>
               ) : (
                 enrollments.map((en) => (
-                  <tr key={en.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={en.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900">{en.student_name}</div>
-                      <div className="text-[11px] font-mono text-slate-400">{en.student_email}</div>
+                      <div className="font-bold text-slate-900 dark:text-white">{en.student_name}</div>
+                      <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500">{en.student_email}</div>
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-slate-800">
+                    <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200">
                       {en.course_title}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5 text-slate-600">
+                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                         <span>{formatDate(en.access_start)}</span>
-                        <span className="text-slate-400">→</span>
-                        <strong className="text-slate-900">{formatDate(en.access_expiry)}</strong>
+                        <span className="text-slate-400 dark:text-slate-500">→</span>
+                        <strong className="text-slate-900 dark:text-white">{formatDate(en.access_expiry)}</strong>
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
@@ -230,16 +230,16 @@ export default function EnrollmentsManagement() {
                           setExtendExpiryDate(en.access_expiry.split('T')[0]);
                           setIsExtendOpen(true);
                         }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold transition-colors"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors"
                         title="Extend Course Expiry"
                       >
-                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-cyan-400" />
                         <span>Extend</span>
                       </button>
 
                       <button
                         onClick={() => handleDeleteEnrollment(en.id, en.student_name, en.course_title)}
-                        className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                        className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                         title="Revoke Access"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

@@ -383,4 +383,228 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
     assert.equal(authRes.status, 401);
     assert.equal(authRes.body.success, false);
   });
+
+  // ==================== WIDEVINE DRM INTEGRATION TESTS ====================
+
+  // Test 25: Existing YouTube video maintains video_type = 'youtube' and YouTube playback config
+  test('25. Existing YouTube video maintains video_type = "youtube" and safe YouTube playback config', async () => {
+    const demoVideo = db.prepare("SELECT id, video_type, provider, external_video_id FROM videos WHERE title LIKE '%01 Introduction to PASCONX%'").get();
+    assert.ok(demoVideo);
+    assert.equal(demoVideo.video_type, 'youtube');
+
+    const res = await request(app)
+      .get(`/api/student/videos/${demoVideo.id}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.video.video_type, 'youtube');
+    assert.equal(res.body.playback.provider, 'youtube');
+    assert.ok(res.body.playback.embedUrl);
+    assert.ok(res.body.playback.embedUrl.includes('youtube.com/embed'));
+    assert.equal(res.body.playback.isDrmProtected, false);
+  });
+
+  // Test 26: Student can access Widevine DRM video and receives DASH manifest & signed playback token
+  test('26. Student can access authorized Widevine DRM video and receives valid playback configuration', async () => {
+    const widevineVideo = db.prepare("SELECT id, video_type FROM videos WHERE video_type = 'widevine'").get();
+    assert.ok(widevineVideo);
+
+    const res = await request(app)
+      .get(`/api/student/videos/${widevineVideo.id}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.video.video_type, 'widevine');
+    assert.equal(res.body.playback.provider, 'widevine');
+    assert.equal(res.body.playback.isDrmProtected, true);
+    assert.equal(res.body.playback.keySystem, 'com.widevine.alpha');
+    assert.ok(res.body.playback.manifestUrl);
+    assert.ok(res.body.playback.manifestUrl.includes('.mpd'));
+    assert.ok(res.body.playback.licenseServerUrl);
+    assert.ok(res.body.playback.playbackToken);
+    // Ensure sensitive backend keys or secrets are NEVER returned to the client
+    assert.equal(res.body.playback.WIDEVINE_API_KEY, undefined);
+    assert.equal(res.body.playback.WIDEVINE_API_SECRET, undefined);
+    assert.equal(res.body.playback.rawKey, undefined);
+  });
+
+  // Test 27: Direct playback route GET /api/videos/:videoId/play works for authorized students
+  test('27. Direct playback endpoint GET /api/videos/:videoId/play works for authorized students', async () => {
+    const widevineVideo = db.prepare("SELECT id FROM videos WHERE video_type = 'widevine'").get();
+    assert.ok(widevineVideo);
+
+    const res = await request(app)
+      .get(`/api/videos/${widevineVideo.id}/play`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.video.id, widevineVideo.id);
+    assert.ok(res.body.playback);
+  });
+
+  // Test 28: Non-enrolled student cannot access Widevine DRM playback
+  test('28. Non-enrolled student cannot access Widevine DRM video (403 Forbidden)', async () => {
+    // Create a new Widevine video in Python course (student is not enrolled in Python)
+    const pythonCourse = db.prepare("SELECT id FROM courses WHERE title = 'Python Full Stack'").get();
+    assert.ok(pythonCourse);
+
+    const newWvVideo = db.prepare(`
+      INSERT INTO videos (course_id, title, description, video_type, provider, privacy_type, external_video_id, manifest_url, status)
+      VALUES (?, 'Protected Python Module', 'Widevine Test', 'widevine', 'widevine', 'widevine_drm', 'wv-py-01', 'https://example.com/dash.mpd', 'ACTIVE')
+    `).run(pythonCourse.id);
+
+    const res = await request(app)
+      .get(`/api/student/videos/${newWvVideo.lastInsertRowid}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.error, /not authorized/i);
+  });
+
+  // Test 29: Student cannot access Widevine video from expired course
+  test('29. Student cannot access Widevine video from an expired course (403 Forbidden)', async () => {
+    const expiredCourse = db.prepare("SELECT id FROM courses WHERE title LIKE '%Legacy System Security%'").get();
+    assert.ok(expiredCourse);
+
+    const expiredWvVideo = db.prepare(`
+      INSERT INTO videos (course_id, title, description, video_type, provider, privacy_type, external_video_id, manifest_url, status)
+      VALUES (?, 'Expired DRM Video', 'Expired DRM Test', 'widevine', 'widevine', 'widevine_drm', 'wv-exp-01', 'https://example.com/dash.mpd', 'ACTIVE')
+    `).run(expiredCourse.id);
+
+    const res = await request(app)
+      .get(`/api/student/videos/${expiredWvVideo.lastInsertRowid}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.error, /expired/i);
+  });
+
+  // Test 30: DRM license proxy rejects request without token
+  test('30. DRM license proxy rejects request without playback authorization token (401)', async () => {
+    const res = await request(app)
+      .post('/api/drm/license')
+      .send(Buffer.from('mock_eme_challenge'));
+
+    assert.equal(res.status, 401);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.error, /token is required/i);
+  });
+
+  // Test 31: DRM license proxy rejects tampered or expired token
+  test('31. DRM license proxy rejects invalid or tampered playback token (403)', async () => {
+    const res = await request(app)
+      .post('/api/drm/license?videoId=1')
+      .set('X-Playback-Token', 'tampered.token.data')
+      .send(Buffer.from('mock_eme_challenge'));
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.error, /denied/i);
+  });
+
+  // Test 32: DRM license proxy reports unconfigured environment clearly
+  test('32. DRM license proxy returns 503 when Widevine is unconfigured in development', async () => {
+    // Obtain valid token for a video with no license_server_url
+    const widevineVideo = db.prepare("SELECT id FROM videos WHERE video_type = 'widevine'").get();
+    // Temporarily clear license_server_url on that video
+    db.prepare("UPDATE videos SET license_server_url = NULL WHERE id = ?").run(widevineVideo.id);
+
+    const playRes = await request(app)
+      .get(`/api/student/videos/${widevineVideo.id}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    // If WIDEVINE_LICENSE_URL env is not set, playback reports unconfigured
+    if (!process.env.WIDEVINE_LICENSE_URL) {
+      assert.equal(playRes.body.playback.isConfigured, false);
+      assert.match(playRes.body.playback.disclaimer, /not configured/i);
+    }
+
+    // Restore license_server_url
+    db.prepare("UPDATE videos SET license_server_url = 'https://cwip-shaka-drm.appspot.com/no_auth' WHERE id = ?").run(widevineVideo.id);
+  });
+
+  // Test 33: Admin can create a Widevine DRM protected video with DASH manifest
+  test('33. Admin can create a Widevine DRM video with DASH manifest URL', async () => {
+    const demoCourse = db.prepare("SELECT id FROM courses WHERE title = 'PASCONX Demo Course'").get();
+
+    const res = await request(app)
+      .post('/api/admin/videos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        title: 'Admin Created DRM Video',
+        description: 'Testing Widevine admin creation',
+        course_id: demoCourse.id,
+        video_type: 'widevine',
+        manifest_url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd',
+        external_video_id: 'px-admin-drm-01',
+        duration_seconds: 450,
+        order_index: 99
+      });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.video.video_type, 'widevine');
+    assert.equal(res.body.video.provider, 'widevine');
+    assert.equal(res.body.video.manifest_url, 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd');
+  });
+
+  // Test 34: Admin cannot create Widevine video without manifest URL
+  test('34. Admin cannot create Widevine DRM video without DASH manifest URL (400)', async () => {
+    const demoCourse = db.prepare("SELECT id FROM courses WHERE title = 'PASCONX Demo Course'").get();
+
+    const res = await request(app)
+      .post('/api/admin/videos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        title: 'Invalid DRM Video',
+        course_id: demoCourse.id,
+        video_type: 'widevine',
+        manifest_url: '' // Missing manifest URL
+      });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.error, /manifest/i);
+  });
+
+  // Test 35: Admin can update existing video between YouTube and Widevine DRM
+  test('35. Admin can update an existing video between YouTube and Widevine DRM', async () => {
+    const demoCourse = db.prepare("SELECT id FROM courses WHERE title = 'PASCONX Demo Course'").get();
+
+    // Create a YouTube video first
+    const createRes = await request(app)
+      .post('/api/admin/videos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        title: 'Convertible Video',
+        course_id: demoCourse.id,
+        video_type: 'youtube',
+        youtube_video_id: 'dQw4w9WgXcQ'
+      });
+
+    assert.equal(createRes.status, 201);
+    const videoId = createRes.body.video.id;
+
+    // Convert to Widevine DRM
+    const updateRes = await request(app)
+      .put(`/api/admin/videos/${videoId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        title: 'Converted to Widevine DRM',
+        video_type: 'widevine',
+        manifest_url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd',
+        external_video_id: 'px-converted-01'
+      });
+
+    assert.equal(updateRes.status, 200);
+    assert.equal(updateRes.body.success, true);
+    assert.equal(updateRes.body.video.video_type, 'widevine');
+    assert.equal(updateRes.body.video.manifest_url, 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd');
+  });
 });
+

@@ -49,9 +49,12 @@ export function initDatabase() {
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT,
+      video_type TEXT NOT NULL DEFAULT 'youtube' CHECK(video_type IN ('youtube', 'widevine')),
       provider TEXT NOT NULL DEFAULT 'youtube',
-      privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK(privacy_type IN ('youtube_unlisted', 'youtube_private')),
+      privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK(privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm')),
       external_video_id TEXT NOT NULL,
+      manifest_url TEXT,
+      license_server_url TEXT,
       duration_seconds INTEGER DEFAULT 0,
       order_index INTEGER DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE')),
@@ -117,5 +120,24 @@ export function initDatabase() {
   `;
 
   db.exec(initStatements);
+
+  // Safe migration: Add missing columns if videos table already existed
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(videos)").all();
+    const columns = new Set(tableInfo.map(c => c.name));
+
+    if (!columns.has('video_type')) {
+      db.exec("ALTER TABLE videos ADD COLUMN video_type TEXT NOT NULL DEFAULT 'youtube' CHECK(video_type IN ('youtube', 'widevine'))");
+    }
+    if (!columns.has('manifest_url')) {
+      db.exec("ALTER TABLE videos ADD COLUMN manifest_url TEXT");
+    }
+    if (!columns.has('license_server_url')) {
+      db.exec("ALTER TABLE videos ADD COLUMN license_server_url TEXT");
+    }
+  } catch (migrationErr) {
+    console.warn('Database migration notice for videos table:', migrationErr.message);
+  }
+
   return db;
 }

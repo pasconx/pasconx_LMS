@@ -14,6 +14,7 @@ import {
   Captions
 } from 'lucide-react';
 import DynamicWatermark from './DynamicWatermark.jsx';
+import { useScreenSecurity, BlackoutOverlay } from './ScreenCaptureGuard.jsx';
 
 export default function YouTubePlayer({
   videoId,
@@ -44,6 +45,17 @@ export default function YouTubePlayer({
   const [completed, setCompleted] = useState(false);
   const [apiError, setApiError] = useState(false);
   const [isCcEnabled, setIsCcEnabled] = useState(false);
+
+  const { isBlackedOut, alertReason, resumePlayback } = useScreenSecurity();
+
+  // Instantly pause video if blackout veil triggers (screenshot attempt / focus loss)
+  useEffect(() => {
+    if (isBlackedOut && playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
+      try {
+        playerRef.current.pauseVideo();
+      } catch (e) {}
+    }
+  }, [isBlackedOut]);
 
   const progressPercent = videoDuration > 0
     ? Math.min(100, (currentSeconds / videoDuration) * 100)
@@ -591,26 +603,31 @@ export default function YouTubePlayer({
             </div>
           </div>
         </div>
+
+        {/* Solid Blackout Veil directly inside containerRef for native fullscreen protection */}
+        {isBlackedOut && (
+          <BlackoutOverlay alertReason={alertReason} onResume={resumePlayback} />
+        )}
       </div>
 
       {/* Status Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors">
         <div className="w-full sm:w-auto flex-1">
-          <div className="flex justify-between items-center text-xs font-semibold text-slate-700 mb-1.5">
+          <div className="flex justify-between items-center text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
             <span className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-brand-600" />
-              Module Progress: <strong className="text-slate-900">{Math.round(progressPercent)}%</strong>
+              <Clock className="w-3.5 h-3.5 text-brand-600 dark:text-cyan-400" />
+              Module Progress: <strong className="text-slate-900 dark:text-white">{Math.round(progressPercent)}%</strong>
               {completed && (
-                <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[11px] font-bold border border-emerald-200">
+                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full text-[11px] font-bold border border-emerald-200 dark:border-emerald-800">
                   <CheckCircle2 className="w-3 h-3" /> Completed
                 </span>
               )}
             </span>
-            <span className="text-slate-500 font-mono text-[11px]">
+            <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">
               {formatTime(currentSeconds)} / {formatTime(videoDuration)}
             </span>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
             <div
               className={`h-2 transition-all duration-300 rounded-full ${
                 completed ? 'bg-emerald-500' : 'bg-brand-600'
@@ -621,21 +638,21 @@ export default function YouTubePlayer({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-cyan-300 border border-brand-200 dark:border-brand-800">
             <ShieldCheck className="w-3.5 h-3.5" /> STEALTH_CONTENT_MODE
           </span>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
             <Lock className="w-3.5 h-3.5" /> Watermarked Session
           </span>
         </div>
       </div>
 
       {/* Security Statement */}
-      <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-3.5 flex items-start gap-3 text-xs text-slate-700">
-        <ShieldCheck className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-900/70 p-3.5 flex items-start gap-3 text-xs text-slate-700 dark:text-slate-300 transition-colors">
+        <ShieldCheck className="w-4 h-4 text-brand-600 dark:text-cyan-400 shrink-0 mt-0.5" />
         <div className="leading-relaxed">
-          <strong className="font-semibold text-slate-900">Protected Course Stream: </strong>
-          Streaming session authorized for <code className="font-mono text-slate-900 font-bold">{student?.email}</code>. Content is dynamically watermarked under academic policy. Casual downloading and direct link sharing are restricted.
+          <strong className="font-semibold text-slate-900 dark:text-white">Protected Course Stream: </strong>
+          Streaming session authorized for <code className="font-mono text-slate-900 dark:text-cyan-300 font-bold">{student?.email}</code>. Content is dynamically watermarked under academic policy. Casual downloading and direct link sharing are restricted.
         </div>
       </div>
     </div>

@@ -36,9 +36,13 @@ export default function VideosManagement() {
     title: '',
     description: '',
     course_id: '',
+    video_type: 'youtube',
     provider: 'youtube',
     privacy_type: 'youtube_unlisted',
     youtube_video_id: '',
+    manifest_url: '',
+    license_server_url: '',
+    external_video_id: '',
     duration_seconds: 300,
     order_index: 1,
     status: 'ACTIVE'
@@ -93,9 +97,13 @@ export default function VideosManagement() {
           title: '',
           description: '',
           course_id: selectedCourseFilter || (courses[0]?.id || ''),
+          video_type: 'youtube',
           provider: 'youtube',
           privacy_type: 'youtube_unlisted',
           youtube_video_id: '',
+          manifest_url: '',
+          license_server_url: '',
+          external_video_id: '',
           duration_seconds: 300,
           order_index: 1,
           status: 'ACTIVE'
@@ -153,11 +161,11 @@ export default function VideosManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <Video className="w-6 h-6 text-indigo-600" />
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5 transition-colors">
+            <Video className="w-6 h-6 text-indigo-600 dark:text-cyan-400" />
             Video Management & Delivery
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors">
             Publish educational videos, configure YouTube Unlisted IDs, and sequence course lectures.
           </p>
         </div>
@@ -168,9 +176,13 @@ export default function VideosManagement() {
               title: '',
               description: '',
               course_id: selectedCourseFilter || (courses[0]?.id || ''),
+              video_type: 'youtube',
               provider: 'youtube',
               privacy_type: 'youtube_unlisted',
               youtube_video_id: '',
+              manifest_url: '',
+              license_server_url: '',
+              external_video_id: '',
               duration_seconds: 300,
               order_index: (videos.length + 1),
               status: 'ACTIVE'
@@ -188,23 +200,23 @@ export default function VideosManagement() {
         <div
           className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
             notification.type === 'error'
-              ? 'bg-rose-50 text-rose-800 border border-rose-200'
-              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60'
+              : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60'
           }`}
         >
-          {notification.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+          <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{notification.message}</span>
         </div>
       )}
 
       {/* Filter Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <span className="text-xs font-bold uppercase text-slate-500 shrink-0">Filter by Course:</span>
+          <span className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 shrink-0">Filter by Course:</span>
           <select
             value={selectedCourseFilter}
             onChange={(e) => handleFilterChange(e.target.value)}
-            className="text-xs p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full sm:w-72"
+            className="text-xs p-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full sm:w-72"
           >
             <option value="">All Institute Courses</option>
             {courses.map((c) => (
@@ -215,65 +227,77 @@ export default function VideosManagement() {
           </select>
         </div>
 
-        <span className="text-xs font-medium text-slate-500">
-          Total: <strong className="text-slate-800">{videos.length}</strong> videos
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Total: <strong className="text-slate-800 dark:text-white">{videos.length}</strong> videos
         </span>
       </div>
 
       {/* Videos Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden transition-colors">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+          <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3.5 px-4 text-left">Order</th>
                 <th className="py-3.5 px-4 text-left">Title</th>
                 <th className="py-3.5 px-4 text-left">Course</th>
                 <th className="py-3.5 px-4 text-left">Provider & Privacy</th>
-                <th className="py-3.5 px-4 text-left">YouTube ID</th>
+                <th className="py-3.5 px-4 text-left">Playback Target</th>
                 <th className="py-3.5 px-4 text-left">Duration</th>
                 <th className="py-3.5 px-4 text-left">Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="py-10 text-center text-slate-400">
+                  <td colSpan="8" className="py-10 text-center text-slate-400 dark:text-slate-500">
                     Loading course videos...
                   </td>
                 </tr>
               ) : videos.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="py-10 text-center text-slate-400">
+                  <td colSpan="8" className="py-10 text-center text-slate-400 dark:text-slate-500">
                     No videos found for this filter.
                   </td>
                 </tr>
               ) : (
                 videos.map((v) => (
-                  <tr key={v.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-500">
+                  <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-500 dark:text-slate-400">
                       #{v.order_index}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900">{v.title}</div>
-                      <div className="text-[11px] text-slate-400 line-clamp-1">{v.description}</div>
+                      <div className="font-bold text-slate-900 dark:text-white">{v.title}</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 line-clamp-1">{v.description}</div>
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-slate-700">{v.course_title}</td>
+                    <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300">{v.course_title}</td>
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-bold uppercase text-[10px] text-red-600 bg-red-50 px-2 py-0.5 rounded w-fit border border-red-200">
-                          {v.provider}
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          {v.privacy_type === 'youtube_private' ? 'Private' : 'Unlisted'}
+                        {v.video_type === 'widevine' ? (
+                          <span className="font-bold uppercase text-[10px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded w-fit border border-purple-200 dark:border-purple-800/60">
+                            Widevine DRM
+                          </span>
+                        ) : (
+                          <span className="font-bold uppercase text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/60 px-2 py-0.5 rounded w-fit border border-red-200 dark:border-red-800/60">
+                            {v.provider || 'YouTube'}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {v.video_type === 'widevine' ? 'Encrypted DASH (.mpd)' : (v.privacy_type === 'youtube_private' ? 'Private' : 'Unlisted')}
                         </span>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-semibold text-slate-800">
-                      {v.external_video_id}
+                    <td className="py-3.5 px-4 font-mono font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {v.video_type === 'widevine' ? (
+                        <div className="truncate max-w-[140px]" title={v.manifest_url || v.external_video_id}>
+                          {v.external_video_id || 'DASH Stream'}
+                        </div>
+                      ) : (
+                        v.external_video_id
+                      )}
                     </td>
-                    <td className="py-3.5 px-4 text-slate-500">
+                    <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">
                       {formatDuration(v.duration_seconds)}
                     </td>
                     <td className="py-3.5 px-4">
@@ -287,16 +311,20 @@ export default function VideosManagement() {
                             title: v.title,
                             description: v.description || '',
                             course_id: v.course_id,
+                            video_type: v.video_type || 'youtube',
                             provider: v.provider,
                             privacy_type: v.privacy_type,
-                            youtube_video_id: v.external_video_id,
+                            youtube_video_id: v.video_type === 'widevine' ? '' : v.external_video_id,
+                            manifest_url: v.manifest_url || '',
+                            license_server_url: v.license_server_url || '',
+                            external_video_id: v.external_video_id || '',
                             duration_seconds: v.duration_seconds,
                             order_index: v.order_index,
                             status: v.status
                           });
                           setIsEditOpen(true);
                         }}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                         title="Edit Video"
                       >
                         <Edit className="w-3.5 h-3.5" />
@@ -304,7 +332,7 @@ export default function VideosManagement() {
 
                       <button
                         onClick={() => handleDeleteVideo(v.id, v.title)}
-                        className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                        className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                         title="Delete Video"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -366,61 +394,156 @@ export default function VideosManagement() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Video Provider</label>
-              <select
-                value={formData.provider}
-                onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              >
-                <option value="youtube">YouTube (MVP)</option>
-                <option value="vdocipher">VdoCipher (Future DRM)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Privacy Mode</label>
-              <select
-                value={formData.privacy_type}
-                onChange={(e) => setFormData({ ...formData, privacy_type: e.target.value })}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              >
-                <option value="youtube_unlisted">YouTube Unlisted (Recommended for MVP)</option>
-                <option value="youtube_private">YouTube Private</option>
-              </select>
-            </div>
-          </div>
-
-          {/* YouTube Private Security Warning Banner */}
-          {formData.privacy_type === 'youtube_private' && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-800 space-y-1">
-              <div className="font-bold flex items-center gap-1.5 text-amber-900">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                Administrative Advisory on YouTube Private
-              </div>
-              <p className="leading-relaxed">
-                Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or integrate VdoCipher later.
-              </p>
-            </div>
-          )}
-
+          {/* Video Type Selector */}
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-              YouTube Video ID or URL
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.youtube_video_id}
-              onChange={(e) => setFormData({ ...formData, youtube_video_id: e.target.value })}
-              placeholder="e.g. dQw4w9WgXcQ or https://youtu.be/..."
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
-            />
-            <span className="text-[11px] text-slate-400">
-              Only the 11-character video ID is stored in the database.
-            </span>
+            <label className="block text-xs font-bold uppercase text-slate-700 mb-2">Video Delivery & Protection Type</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, video_type: 'youtube', provider: 'youtube' })}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                  formData.video_type === 'youtube'
+                    ? 'border-red-500 bg-red-50/50 ring-2 ring-red-500/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                  formData.video_type === 'youtube' ? 'border-red-600' : 'border-slate-300'
+                }`}>
+                  {formData.video_type === 'youtube' && <div className="w-2 h-2 rounded-full bg-red-600" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">YouTube Video</div>
+                  <div className="text-[11px] text-slate-500">Unlisted delivery for general course modules</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, video_type: 'widevine', provider: 'widevine', privacy_type: 'widevine_drm' })}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                  formData.video_type === 'widevine'
+                    ? 'border-purple-600 bg-purple-50/50 ring-2 ring-purple-600/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                  formData.video_type === 'widevine' ? 'border-purple-600' : 'border-slate-300'
+                }`}>
+                  {formData.video_type === 'widevine' && <div className="w-2 h-2 rounded-full bg-purple-600" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Widevine DRM</div>
+                  <div className="text-[11px] text-slate-500">Encrypted DASH stream + EME Shaka Player</div>
+                </div>
+              </button>
+            </div>
           </div>
+
+          {/* Conditional Fields: YouTube vs Widevine DRM */}
+          {formData.video_type === 'youtube' ? (
+            <>
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Privacy Mode</label>
+                <select
+                  value={formData.privacy_type}
+                  onChange={(e) => setFormData({ ...formData, privacy_type: e.target.value })}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                >
+                  <option value="youtube_unlisted">YouTube Unlisted (Recommended)</option>
+                  <option value="youtube_private">YouTube Private</option>
+                </select>
+              </div>
+
+              {formData.privacy_type === 'youtube_private' && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-800 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    Administrative Advisory on YouTube Private
+                  </div>
+                  <p className="leading-relaxed">
+                    Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted or Widevine DRM.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                  YouTube Video ID or URL
+                </label>
+                <input
+                  type="text"
+                  required={formData.video_type === 'youtube'}
+                  value={formData.youtube_video_id}
+                  onChange={(e) => setFormData({ ...formData, youtube_video_id: e.target.value })}
+                  placeholder="e.g. dQw4w9WgXcQ or https://youtu.be/..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Only the 11-character video ID is stored in the database.
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                  DASH Manifest URL (.mpd)
+                </label>
+                <input
+                  type="url"
+                  required={formData.video_type === 'widevine'}
+                  value={formData.manifest_url}
+                  onChange={(e) => setFormData({ ...formData, manifest_url: e.target.value })}
+                  placeholder="https://storage.example.com/videos/module1/dash.mpd"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Must point to an encrypted DASH manifest (.mpd) hosted on private S3/GCS/R2 or CDN.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                    Asset / Content ID
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.external_video_id}
+                    onChange={(e) => setFormData({ ...formData, external_video_id: e.target.value })}
+                    placeholder="e.g. px-asset-sec-01"
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                  />
+                  <span className="text-[11px] text-slate-400">Identifier for Widevine license issuance.</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                    Custom License Server URL (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.license_server_url}
+                    onChange={(e) => setFormData({ ...formData, license_server_url: e.target.value })}
+                    placeholder="Leave empty to use server default"
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                  />
+                  <span className="text-[11px] text-slate-400">Overrides WIDEVINE_LICENSE_URL env setting if specified.</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-purple-950">
+                  <ShieldCheck className="w-4 h-4 text-purple-600" />
+                  DRM Credential Security Policy
+                </div>
+                <p className="leading-relaxed text-[11px]">
+                  Raw encryption keys and DRM provider secrets are strictly managed server-side. Administrators never enter raw keys into frontend forms.
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -510,18 +633,73 @@ export default function VideosManagement() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Privacy Mode</label>
-              <select
-                value={formData.privacy_type}
-                onChange={(e) => setFormData({ ...formData, privacy_type: e.target.value })}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          {/* Video Type Selector */}
+          <div>
+            <label className="block text-xs font-bold uppercase text-slate-700 mb-2">Video Delivery & Protection Type</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, video_type: 'youtube', provider: 'youtube' })}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                  formData.video_type === 'youtube'
+                    ? 'border-red-500 bg-red-50/50 ring-2 ring-red-500/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
               >
-                <option value="youtube_unlisted">YouTube Unlisted</option>
-                <option value="youtube_private">YouTube Private</option>
-              </select>
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                  formData.video_type === 'youtube' ? 'border-red-600' : 'border-slate-300'
+                }`}>
+                  {formData.video_type === 'youtube' && <div className="w-2 h-2 rounded-full bg-red-600" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">YouTube Video</div>
+                  <div className="text-[11px] text-slate-500">Unlisted delivery for general course modules</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, video_type: 'widevine', provider: 'widevine', privacy_type: 'widevine_drm' })}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                  formData.video_type === 'widevine'
+                    ? 'border-purple-600 bg-purple-50/50 ring-2 ring-purple-600/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                  formData.video_type === 'widevine' ? 'border-purple-600' : 'border-slate-300'
+                }`}>
+                  {formData.video_type === 'widevine' && <div className="w-2 h-2 rounded-full bg-purple-600" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Widevine DRM</div>
+                  <div className="text-[11px] text-slate-500">Encrypted DASH stream + EME Shaka Player</div>
+                </div>
+              </button>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {formData.video_type === 'youtube' ? (
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Privacy Mode</label>
+                <select
+                  value={formData.privacy_type}
+                  onChange={(e) => setFormData({ ...formData, privacy_type: e.target.value })}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                >
+                  <option value="youtube_unlisted">YouTube Unlisted</option>
+                  <option value="youtube_private">YouTube Private</option>
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">DRM Protection Mode</label>
+                <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-800">
+                  Google Widevine Modular (EME)
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Status</label>
@@ -536,22 +714,61 @@ export default function VideosManagement() {
             </div>
           </div>
 
-          {formData.privacy_type === 'youtube_private' && (
+          {formData.video_type === 'youtube' && formData.privacy_type === 'youtube_private' && (
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-800">
-              <strong>Advisory:</strong> Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or integrate VdoCipher later.
+              <strong>Advisory:</strong> Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted or Widevine DRM.
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">YouTube Video ID</label>
-            <input
-              type="text"
-              required
-              value={formData.youtube_video_id}
-              onChange={(e) => setFormData({ ...formData, youtube_video_id: e.target.value })}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
-            />
-          </div>
+          {formData.video_type === 'youtube' ? (
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">YouTube Video ID</label>
+              <input
+                type="text"
+                required={formData.video_type === 'youtube'}
+                value={formData.youtube_video_id}
+                onChange={(e) => setFormData({ ...formData, youtube_video_id: e.target.value })}
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+              />
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">DASH Manifest URL (.mpd)</label>
+                <input
+                  type="url"
+                  required={formData.video_type === 'widevine'}
+                  value={formData.manifest_url}
+                  onChange={(e) => setFormData({ ...formData, manifest_url: e.target.value })}
+                  placeholder="https://storage.example.com/videos/module1/dash.mpd"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Asset / Content ID</label>
+                  <input
+                    type="text"
+                    value={formData.external_video_id}
+                    onChange={(e) => setFormData({ ...formData, external_video_id: e.target.value })}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Custom License Server URL</label>
+                  <input
+                    type="url"
+                    value={formData.license_server_url}
+                    onChange={(e) => setFormData({ ...formData, license_server_url: e.target.value })}
+                    placeholder="Leave empty for system default"
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

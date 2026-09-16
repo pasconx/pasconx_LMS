@@ -61,28 +61,45 @@ export default function DynamicWatermark({ student, watermarkProfile }) {
   const currentPos = SAFE_POSITIONS[posIdx];
 
   return (
-    <div 
-      className="absolute pointer-events-none select-none z-20 transition-all duration-[4000ms] ease-in-out font-mono"
-      style={{
-        ...currentPos,
-        opacity: 0.32
-      }}
-      aria-hidden="true"
-    >
+    <>
+      {/* Primary Drifting Watermark Badge */}
       <div 
-        className="p-2.5 rounded-lg border border-white/20 bg-black/25 backdrop-blur-[1px] text-[10px] sm:text-[11px] leading-tight text-white/90 font-medium tracking-wide shadow-sm"
+        className="absolute pointer-events-none select-none z-20 transition-all duration-[4000ms] ease-in-out font-mono"
         style={{
-          textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 1px rgba(0,0,0,0.9)'
+          ...currentPos,
+          opacity: 0.38
         }}
+        aria-hidden="true"
       >
-        <div className="font-extrabold tracking-widest text-[#0c8ee7] text-[9px] uppercase pb-0.5">
-          PASCONX ACADEMY
+        <div 
+          className="p-2.5 rounded-lg border border-white/20 bg-black/35 backdrop-blur-[1px] text-[10px] sm:text-[11px] leading-tight text-white/90 font-medium tracking-wide shadow-sm"
+          style={{
+            textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 1px rgba(0,0,0,0.9)'
+          }}
+        >
+          <div className="font-extrabold tracking-widest text-[#0c8ee7] text-[9px] uppercase pb-0.5">
+            PASCONX ACADEMY
+          </div>
+          <div className="text-white font-semibold">Student: {studentName}</div>
+          <div className="text-slate-300">ID: {studentId}</div>
+          <div className="text-slate-300">{studentEmail}</div>
+          <div className="text-slate-400 text-[9px] pt-0.5">{currentTimestamp}</div>
         </div>
-        <div className="text-white font-semibold">Student: {studentName}</div>
-        <div className="text-slate-300">ID: {studentId}</div>
-        <div className="text-slate-300">{studentEmail}</div>
-        <div className="text-slate-400 text-[9px] pt-0.5">{currentTimestamp}</div>
       </div>
-    </div>
+
+      {/* Subtle Distributed Forensic Micro-Watermarks across screen boundaries to prevent cropping */}
+      <div 
+        className="absolute top-3 left-4 pointer-events-none select-none z-15 font-mono text-[9px] text-white/20 uppercase tracking-widest"
+        aria-hidden="true"
+      >
+        PASCONX • {studentId} • {studentEmail}
+      </div>
+      <div 
+        className="absolute bottom-12 right-4 pointer-events-none select-none z-15 font-mono text-[9px] text-white/20 uppercase tracking-widest"
+        aria-hidden="true"
+      >
+        PROTECTED STREAM • {studentId}
+      </div>
+    </>
   );
 }
