@@ -23,6 +23,13 @@ import {
   createAdminCourseDocument,
   deleteAdminCourseDocument
 } from '../controllers/adminController.js';
+import {
+  getAdminMeetings,
+  createMeeting,
+  updateMeeting,
+  updateMeetingStatus,
+  deleteMeeting
+} from '../controllers/meetingController.js';
 import { authenticateUser, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -66,5 +73,12 @@ router.get('/enrollments', getEnrollments);
 router.post('/enrollments', createEnrollment);
 router.put('/enrollments/:id', updateEnrollment);
 router.delete('/enrollments/:id', deleteEnrollment);
+
+// Course Meetings Management
+router.get('/meetings', getAdminMeetings);
+router.post('/meetings', createMeeting);
+router.put('/meetings/:id', updateMeeting);
+router.patch('/meetings/:id/status', updateMeetingStatus);
+router.delete('/meetings/:id', deleteMeeting);
 
 export default router;

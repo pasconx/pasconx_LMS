@@ -15,6 +15,10 @@ import {
   deleteNote,
   exportStudentNotes
 } from '../controllers/notesController.js';
+import {
+  getStudentMeetings,
+  getStudentMeetingDetail
+} from '../controllers/meetingController.js';
 import { authenticateUser, requireStudent } from '../middleware/auth.js';
 import { checkCourseAccess, checkVideoAccess, checkDocumentAccess } from '../middleware/accessControl.js';
 
@@ -52,6 +56,10 @@ router.delete('/notes/:noteId', deleteNote);
 // Video specific notes
 router.get('/videos/:videoId/notes', checkVideoAccess, getVideoNotes);
 router.post('/videos/:videoId/notes', checkVideoAccess, createNote);
+
+// Course Meetings routes
+router.get('/meetings', getStudentMeetings);
+router.get('/meetings/:id', getStudentMeetingDetail);
 
 export default router;
 

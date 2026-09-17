@@ -796,5 +796,221 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
     const check = db.prepare('SELECT * FROM student_notes WHERE id = ?').get(testNoteId);
     assert.equal(check, undefined);
   });
+
+  // --- Calendar & Course Meetings Tests (Tests 46 - 55) ---
+
+  let testMeetingId = null;
+  let testCourseId = null;
+  let otherCourseId = null;
+
+  test('46. Admin can schedule a Google Meet live class for a course', async () => {
+    const demoCourse = db.prepare("SELECT id FROM courses WHERE title = 'PASCONX Demo Course'").get();
+    testCourseId = demoCourse.id;
+
+    const startTime = new Date(Date.now() + 3600 * 1000).toISOString(); // 1 hour from now
+    const endTime = new Date(Date.now() + 7200 * 1000).toISOString();   // 2 hours from now
+
+    const res = await request(app)
+      .post('/api/admin/meetings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        course_id: testCourseId,
+        title: 'Full Stack Architecture Live Q&A',
+        description: 'Deep dive into microservices and live debugging.',
+        platform: 'google_meet',
+        meeting_url: 'https://meet.google.com/abc-defg-hij',
+        instructor_name: 'Dr. Salman',
+        start_time: startTime,
+        end_time: endTime
+      });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.meeting.title, 'Full Stack Architecture Live Q&A');
+    assert.equal(res.body.meeting.platform, 'google_meet');
+    assert.equal(res.body.meeting.meeting_url, 'https://meet.google.com/abc-defg-hij');
+    assert.ok(res.body.meeting.id);
+    testMeetingId = res.body.meeting.id;
+  });
+
+  test('47. Enrolled student automatically sees course meeting on their calendar/meetings list', async () => {
+    const res = await request(app)
+      .get('/api/student/meetings')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    const meeting = res.body.meetings.find(m => m.id === testMeetingId);
+    assert.ok(meeting);
+    assert.equal(meeting.course_id, testCourseId);
+    assert.equal(meeting.platform, 'google_meet');
+  });
+
+  test('48. Student NOT enrolled in the course CANNOT see the meeting', async () => {
+    // Create a meeting for Python Full Stack which student@pasconx.com is not enrolled in
+    const pythonCourse = db.prepare("SELECT id FROM courses WHERE title = 'Python Full Stack'").get();
+    otherCourseId = pythonCourse.id;
+
+    const startTime = new Date(Date.now() + 3600 * 1000).toISOString();
+    const endTime = new Date(Date.now() + 7200 * 1000).toISOString();
+
+    const createRes = await request(app)
+      .post('/api/admin/meetings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        course_id: otherCourseId,
+        title: 'Python Asyncio Deep Dive',
+        platform: 'zoom',
+        meeting_url: 'https://zoom.us/j/987654321',
+        instructor_name: 'Instructor Alex',
+        start_time: startTime,
+        end_time: endTime
+      });
+    const pythonMeetingId = createRes.body.meeting.id;
+
+    // student@pasconx.com fetches meetings
+    const res = await request(app)
+      .get('/api/student/meetings')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    const hasPythonMeeting = res.body.meetings.some(m => m.id === pythonMeetingId);
+    assert.equal(hasPythonMeeting, false); // Blocked because student is not enrolled in Python Full Stack
+
+    // Clean up
+    await request(app).delete(`/api/admin/meetings/${pythonMeetingId}`).set('Authorization', `Bearer ${adminToken}`);
+  });
+
+  test('49. Non-enrolled student cannot access meeting detail endpoint (403 Forbidden)', async () => {
+    // rahul@example.com is not enrolled in PASCONX Demo Course (testCourseId)
+    const res = await request(app)
+      .get(`/api/student/meetings/${testMeetingId}`)
+      .set('Authorization', `Bearer ${rahulToken}`);
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+  });
+
+  test('50. Admin can schedule a Zoom meeting with valid URL validation', async () => {
+    const startTime = new Date(Date.now() + 3600 * 1000).toISOString();
+    const endTime = new Date(Date.now() + 7200 * 1000).toISOString();
+
+    // Invalid URL test
+    const failRes = await request(app)
+      .post('/api/admin/meetings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        course_id: testCourseId,
+        title: 'Invalid Link Meeting',
+        platform: 'zoom',
+        meeting_url: 'not-a-url',
+        start_time: startTime,
+        end_time: endTime
+      });
+    assert.equal(failRes.status, 400);
+
+    // Valid Zoom meeting
+    const successRes = await request(app)
+      .post('/api/admin/meetings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        course_id: testCourseId,
+        title: 'Cybersecurity Incident Response Lab',
+        platform: 'zoom',
+        meeting_url: 'https://zoom.us/j/1234567890',
+        start_time: startTime,
+        end_time: endTime
+      });
+    assert.equal(successRes.status, 201);
+    assert.equal(successRes.body.meeting.platform, 'zoom');
+
+    // Clean up
+    await request(app).delete(`/api/admin/meetings/${successRes.body.meeting.id}`).set('Authorization', `Bearer ${adminToken}`);
+  });
+
+  test('51. Admin edits meeting course: visibility immediately transfers to new course students', async () => {
+    // Move testMeetingId to otherCourseId (Python Full Stack, where Rahul is enrolled)
+    const updateRes = await request(app)
+      .put(`/api/admin/meetings/${testMeetingId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        course_id: otherCourseId,
+        title: 'Transferred Course Meeting'
+      });
+
+    assert.equal(updateRes.status, 200);
+    assert.equal(updateRes.body.meeting.course_id, otherCourseId);
+
+    // Student A (not enrolled in Python) should no longer see it
+    const resA = await request(app)
+      .get('/api/student/meetings')
+      .set('Authorization', `Bearer ${studentToken}`);
+    assert.equal(resA.body.meetings.some(m => m.id === testMeetingId), false);
+
+    // Rahul (Student B, enrolled in Python) should now see it!
+    const resB = await request(app)
+      .get('/api/student/meetings')
+      .set('Authorization', `Bearer ${rahulToken}`);
+    assert.equal(resB.body.meetings.some(m => m.id === testMeetingId), true);
+
+    // Move it back to testCourseId for subsequent tests
+    await request(app)
+      .put(`/api/admin/meetings/${testMeetingId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ course_id: testCourseId });
+  });
+
+  test('52. Admin cancels meeting with reason: student sees cancelled status and can_join is false', async () => {
+    const cancelRes = await request(app)
+      .patch(`/api/admin/meetings/${testMeetingId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        status: 'cancelled',
+        cancellation_reason: 'Instructor unavailable due to emergency.'
+      });
+
+    assert.equal(cancelRes.status, 200);
+    assert.equal(cancelRes.body.meeting.status, 'cancelled');
+
+    // Student fetches meeting
+    const studentRes = await request(app)
+      .get(`/api/student/meetings/${testMeetingId}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(studentRes.status, 200);
+    assert.equal(studentRes.body.meeting.status, 'cancelled');
+    assert.equal(studentRes.body.meeting.cancellation_reason, 'Instructor unavailable due to emergency.');
+    assert.equal(studentRes.body.meeting.can_join, false);
+  });
+
+  test('53. Student cannot access admin meetings API (403 Forbidden)', async () => {
+    const res = await request(app)
+      .post('/api/admin/meetings')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        course_id: testCourseId,
+        title: 'Hacked Meeting',
+        platform: 'zoom',
+        meeting_url: 'https://zoom.us/j/123',
+        start_time: new Date().toISOString(),
+        end_time: new Date().toISOString()
+      });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+  });
+
+  test('54. Admin can delete a meeting', async () => {
+    const delRes = await request(app)
+      .delete(`/api/admin/meetings/${testMeetingId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    assert.equal(delRes.status, 200);
+    assert.equal(delRes.body.success, true);
+
+    // Verify gone
+    const check = db.prepare('SELECT * FROM meetings WHERE id = ?').get(testMeetingId);
+    assert.equal(check, undefined);
+  });
 });
 

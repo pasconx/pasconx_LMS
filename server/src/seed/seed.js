@@ -260,6 +260,71 @@ export async function seed() {
     1
   );
 
+  // 7. Sample Course Meetings (Google Meet & Zoom)
+  const insertMeeting = db.prepare(`
+    INSERT INTO meetings (
+      course_id, title, description, platform, meeting_url, instructor_name, start_time, end_time, status, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const now = new Date();
+  // Today at 7:00 PM IST (UTC 13:30)
+  const today7pm = new Date(now);
+  today7pm.setHours(19, 0, 0, 0);
+  const today8pm = new Date(now);
+  today8pm.setHours(20, 0, 0, 0);
+
+  // Tomorrow at 6:00 PM IST
+  const tomorrow6pm = new Date(now.getTime() + 24 * 3600 * 1000);
+  tomorrow6pm.setHours(18, 0, 0, 0);
+  const tomorrow7pm = new Date(now.getTime() + 24 * 3600 * 1000);
+  tomorrow7pm.setHours(19, 0, 0, 0);
+
+  // Day after tomorrow at 7:30 PM IST
+  const futureDate = new Date(now.getTime() + 48 * 3600 * 1000);
+  futureDate.setHours(19, 30, 0, 0);
+  const futureDateEnd = new Date(now.getTime() + 48 * 3600 * 1000);
+  futureDateEnd.setHours(20, 30, 0, 0);
+
+  insertMeeting.run(
+    courseDemo,
+    'PASCONX Orientation & Curriculum Live Q&A',
+    'Interactive live Q&A session discussing course structure, expectations, and student queries.',
+    'google_meet',
+    'https://meet.google.com/abc-defg-hij',
+    'Dr. Salman & Academic Team',
+    today7pm.toISOString(),
+    today8pm.toISOString(),
+    'scheduled',
+    adminId
+  );
+
+  insertMeeting.run(
+    courseCyber,
+    'Cybersecurity Threat Modeling & Live Attack Simulation',
+    'Live workshop demonstrating Wireshark packet capture and ethical defense countermeasures.',
+    'zoom',
+    'https://zoom.us/j/9876543210',
+    'Prof. Rajesh Sharma',
+    tomorrow6pm.toISOString(),
+    tomorrow7pm.toISOString(),
+    'scheduled',
+    adminId
+  );
+
+  insertMeeting.run(
+    coursePython,
+    'Python Asyncio, WebSockets & Real-Time Engineering',
+    'Masterclass on asynchronous event loops, threading, and distributed queues.',
+    'google_meet',
+    'https://meet.google.com/xyz-uvwx-rst',
+    'Instructor Alex Chen',
+    futureDate.toISOString(),
+    futureDateEnd.toISOString(),
+    'scheduled',
+    adminId
+  );
+
   console.log('--- Seeding Completed Successfully ---');
 }
 

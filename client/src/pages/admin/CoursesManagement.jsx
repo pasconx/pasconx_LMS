@@ -161,32 +161,42 @@ export default function CoursesManagement() {
           {courses.map((course) => (
             <div
               key={course.id}
-              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300 flex flex-col justify-between group"
             >
               <div>
-                {/* Thumbnail */}
-                <div className="h-40 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
+                {/* Thumbnail with hover zoom */}
+                <Link
+                  to={`/admin/videos?courseId=${course.id}`}
+                  className="block h-44 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative cursor-pointer"
+                  title={`Manage videos for ${course.title}`}
+                >
                   {course.thumbnail_url ? (
                     <img
                       src={course.thumbnail_url}
                       alt={course.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-slate-800 dark:bg-slate-900 text-white font-bold text-lg">
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 text-white font-bold text-lg">
                       {course.title.substring(0, 2).toUpperCase()}
                     </div>
                   )}
                   <div className="absolute top-3 right-3">
                     <StatusBadge status={course.status} />
                   </div>
-                </div>
+                </Link>
 
                 {/* Content */}
                 <div className="p-5 space-y-3">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
-                    {course.title}
-                  </h3>
+                  <Link
+                    to={`/admin/videos?courseId=${course.id}`}
+                    className="block cursor-pointer"
+                    title={`Manage videos for ${course.title}`}
+                  >
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug group-hover:text-brand-600 dark:group-hover:text-cyan-400 transition-colors">
+                      {course.title}
+                    </h3>
+                  </Link>
                   <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                     {course.description || 'No course description provided.'}
                   </p>
@@ -208,7 +218,7 @@ export default function CoursesManagement() {
               <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                 <Link
                   to={`/admin/videos?courseId=${course.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-cyan-400 hover:text-indigo-800 dark:hover:text-cyan-300"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-cyan-400 hover:text-indigo-800 dark:hover:text-cyan-300 cursor-pointer transition-colors"
                 >
                   <Video className="w-3.5 h-3.5" />
                   Manage Videos ({course.total_videos})
@@ -226,7 +236,7 @@ export default function CoursesManagement() {
                       });
                       setIsEditOpen(true);
                     }}
-                    className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors"
+                    className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                     title="Edit Course"
                   >
                     <Edit className="w-3.5 h-3.5" />
@@ -234,7 +244,7 @@ export default function CoursesManagement() {
 
                   <button
                     onClick={() => handleDeleteCourse(course.id, course.title)}
-                    className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-100 transition-colors"
+                    className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                     title="Delete Course"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

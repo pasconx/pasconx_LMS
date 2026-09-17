@@ -3,28 +3,49 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../api/client.js';
 import { StatusBadge } from '../../components/common/Badge.jsx';
-import { BookOpen, PlayCircle, Clock, AlertTriangle, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { 
+  BookOpen, 
+  PlayCircle, 
+  Clock, 
+  AlertTriangle, 
+  ArrowRight, 
+  CheckCircle2, 
+  ShieldAlert,
+  Calendar,
+  Video,
+  Radio,
+  ExternalLink
+} from 'lucide-react';
+import MeetingDetailsModal, { formatMeetingTimeIST } from '../../components/meetings/MeetingDetailsModal.jsx';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
+  const [upcomingMeetings, setUpcomingMeetings] = useState([]);
+  const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get('/student/courses');
-        if (res.success) {
-          setCourses(res.courses);
+        const [courseRes, meetingRes] = await Promise.all([
+          api.get('/student/courses'),
+          api.get('/student/meetings?limit=4')
+        ]);
+        if (courseRes.success) {
+          setCourses(courseRes.courses);
+        }
+        if (meetingRes.success) {
+          setUpcomingMeetings(meetingRes.meetings || []);
         }
       } catch (err) {
-        setError(err.message || 'Failed to load assigned courses.');
+        setError(err.message || 'Failed to load dashboard data.');
       } finally {
         setLoading(false);
       }
     };
-    fetchCourses();
+    fetchData();
   }, []);
 
   const activeCourses = courses.filter(c => c.is_active);
@@ -89,6 +110,111 @@ export default function StudentDashboard() {
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Upcoming Live Classes & Meetings Section */}
+      {upcomingMeetings.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 transition-colors">
+              <Calendar className="w-5 h-5 text-brand-600 dark:text-cyan-400" />
+              Upcoming Live Classes & Meetings
+            </h2>
+            <Link
+              to="/student/calendar"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 dark:text-cyan-400 hover:underline"
+            >
+              <span>View Full Calendar</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {upcomingMeetings.map((meeting) => {
+              const { dateStr, timeRangeStr, startTimeStr } = formatMeetingTimeIST(meeting.start_time, meeting.end_time);
+              const isMeet = meeting.platform === 'google_meet';
+              const status = meeting.runtime_status || meeting.status;
+              const isLive = status === 'live';
+              const isCancelled = status === 'cancelled';
+
+              return (
+                <div
+                  key={meeting.id}
+                  onClick={() => setSelectedMeeting(meeting)}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs hover:shadow-md hover:border-brand-300 dark:hover:border-cyan-500/40 transition-all flex flex-col justify-between space-y-3 cursor-pointer group"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        isMeet
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                          : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                      }`}>
+                        <Video className="w-3 h-3" />
+                        <span>{isMeet ? 'Google Meet' : 'Zoom'}</span>
+                      </span>
+
+                      {isLive ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-500 text-white animate-pulse">
+                          <Radio className="w-3 h-3" />
+                          <span>Live Now</span>
+                        </span>
+                      ) : isCancelled ? (
+                        <span className="text-[10px] font-bold text-rose-500">
+                          Cancelled
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {startTimeStr}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] font-bold text-brand-600 dark:text-cyan-400 line-clamp-1">
+                      {meeting.course_title}
+                    </div>
+
+                    <h3 className="text-xs font-extrabold text-slate-900 dark:text-white line-clamp-2 leading-snug group-hover:text-brand-600 dark:group-hover:text-cyan-400 transition-colors">
+                      {meeting.title}
+                    </h3>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{dateStr}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {timeRangeStr ? timeRangeStr.split('-')[0] : ''} IST
+                    </span>
+
+                    {meeting.can_join && !isCancelled ? (
+                      <a
+                        href={meeting.meeting_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold text-white shadow-xs ${
+                          isMeet
+                            ? 'bg-emerald-600 hover:bg-emerald-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        <span>Join</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : (
+                      <span className="text-xs font-bold text-brand-600 dark:text-cyan-400 group-hover:underline">
+                        Details →
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -228,6 +354,14 @@ export default function StudentDashboard() {
             ))}
           </div>
         </div>
+      )}
+
+      {selectedMeeting && (
+        <MeetingDetailsModal
+          meeting={selectedMeeting}
+          onClose={() => setSelectedMeeting(null)}
+          isAdmin={false}
+        />
       )}
     </div>
   );

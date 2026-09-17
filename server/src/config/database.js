@@ -110,6 +110,23 @@ export function initDatabase() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS meetings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      platform TEXT NOT NULL CHECK(platform IN ('google_meet', 'zoom')),
+      meeting_url TEXT NOT NULL,
+      instructor_name TEXT,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled', 'cancelled', 'completed')),
+      cancellation_reason TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS security_audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -130,6 +147,8 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_notes_student ON student_notes(student_id);
     CREATE INDEX IF NOT EXISTS idx_notes_video ON student_notes(student_id, video_id);
     CREATE INDEX IF NOT EXISTS idx_notes_course ON student_notes(student_id, course_id);
+    CREATE INDEX IF NOT EXISTS idx_meetings_course ON meetings(course_id, start_time);
+    CREATE INDEX IF NOT EXISTS idx_meetings_status ON meetings(status, start_time);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON security_audit_logs(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_event ON security_audit_logs(event_type, created_at);
   `;
