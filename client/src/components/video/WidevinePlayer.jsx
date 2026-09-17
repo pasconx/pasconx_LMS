@@ -30,7 +30,8 @@ export default function WidevinePlayer({
   onProgressUpdate,
   disclaimer,
   student,
-  watermarkProfile
+  watermarkProfile,
+  playerControlRef
 }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -56,6 +57,30 @@ export default function WidevinePlayer({
   const [widevineSupported, setWidevineSupported] = useState(true);
 
   const { isBlackedOut, alertReason, resumePlayback } = useScreenSecurity();
+
+  // Expose player control interface for notes timestamp capture & seeking
+  useEffect(() => {
+    if (playerControlRef) {
+      playerControlRef.current = {
+        getCurrentTime: () => {
+          try {
+            if (videoRef.current) {
+              return Math.round(videoRef.current.currentTime);
+            }
+          } catch (e) {}
+          return currentSeconds || 0;
+        },
+        seekTo: (sec) => {
+          try {
+            if (videoRef.current) {
+              videoRef.current.currentTime = sec;
+              setCurrentSeconds(sec);
+            }
+          } catch (e) {}
+        }
+      };
+    }
+  }, [playerControlRef, currentSeconds]);
 
   // Instantly pause DRM video element on blackout
   useEffect(() => {

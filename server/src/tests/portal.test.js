@@ -606,5 +606,195 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
     assert.equal(updateRes.body.video.video_type, 'widevine');
     assert.equal(updateRes.body.video.manifest_url, 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd');
   });
+
+  // --- Student Notes System Tests (Tests 36 - 45) ---
+
+  let testNoteId = null;
+  let enrolledVideoId = null;
+
+  test('36. Student can create a note on an enrolled video with timestamp and content', async () => {
+    // Find an active video for a course the demo student is enrolled in
+    const enrolledVideo = db.prepare(`
+      SELECT v.id, v.title FROM videos v
+      JOIN courses c ON v.course_id = c.id
+      JOIN enrollments e ON e.course_id = c.id
+      JOIN users u ON e.student_id = u.id
+      WHERE u.email = 'student@pasconx.com' AND e.status = 'ACTIVE' AND v.status = 'ACTIVE'
+      LIMIT 1
+    `).get();
+
+    assert.ok(enrolledVideo);
+    enrolledVideoId = enrolledVideo.id;
+
+    const res = await request(app)
+      .post(`/api/student/videos/${enrolledVideoId}/notes`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        title: 'Key Security Concept',
+        content: 'Remember that authentication tokens must be HTTP-only cookies to prevent XSS attacks.',
+        timestamp_seconds: 754 // 12m 34s
+      });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.note.title, 'Key Security Concept');
+    assert.equal(res.body.note.timestamp_seconds, 754);
+    assert.ok(res.body.note.id);
+    testNoteId = res.body.note.id;
+  });
+
+  test('37. Student can retrieve notes for the specific video, sorted chronologically', async () => {
+    // Add another note with an earlier timestamp
+    await request(app)
+      .post(`/api/student/videos/${enrolledVideoId}/notes`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        title: 'Introduction Topic',
+        content: 'Speaker introduces architectural layers.',
+        timestamp_seconds: 120 // 2m 00s
+      });
+
+    const res = await request(app)
+      .get(`/api/student/videos/${enrolledVideoId}/notes`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.notes.length >= 2);
+    // Earlier timestamp should come first
+    assert.equal(res.body.notes[0].timestamp_seconds, 120);
+    assert.equal(res.body.notes[1].timestamp_seconds, 754);
+  });
+
+  test('38. Student cannot create note for video in an un-enrolled course (403 Forbidden)', async () => {
+    // Find video in a course student@pasconx.com is NOT enrolled in
+    const unenrolledVideo = db.prepare(`
+      SELECT v.id FROM videos v
+      WHERE v.course_id NOT IN (
+        SELECT course_id FROM enrollments e
+        JOIN users u ON e.student_id = u.id
+        WHERE u.email = 'student@pasconx.com'
+      )
+      LIMIT 1
+    `).get();
+
+    if (unenrolledVideo) {
+      const res = await request(app)
+        .post(`/api/student/videos/${unenrolledVideo.id}/notes`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({
+          title: 'Unauthorized Note',
+          content: 'This should be blocked.'
+        });
+
+      assert.equal(res.status, 403);
+      assert.equal(res.body.success, false);
+    }
+  });
+
+  test('39. Note Ownership Isolation: Student B cannot see Student A notes', async () => {
+    // rahul (Student B) requests all notes
+    const res = await request(app)
+      .get('/api/student/notes')
+      .set('Authorization', `Bearer ${rahulToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    // None of rahul's notes should have testNoteId (which belongs to student@pasconx.com)
+    const hasStudentANote = res.body.notes.some(n => n.id === testNoteId);
+    assert.equal(hasStudentANote, false);
+  });
+
+  test('40. Student B cannot update Student A note (403 Forbidden)', async () => {
+    // rahul attempts to modify student's note
+    const res = await request(app)
+      .put(`/api/student/notes/${testNoteId}`)
+      .set('Authorization', `Bearer ${rahulToken}`)
+      .send({
+        title: 'Tampered Note Title',
+        content: 'Tampered Content'
+      });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+
+    // Verify note was NOT changed in database
+    const check = db.prepare('SELECT title FROM student_notes WHERE id = ?').get(testNoteId);
+    assert.equal(check.title, 'Key Security Concept');
+  });
+
+  test('41. Student B cannot delete Student A note (403 Forbidden)', async () => {
+    // rahul attempts to delete student's note
+    const res = await request(app)
+      .delete(`/api/student/notes/${testNoteId}`)
+      .set('Authorization', `Bearer ${rahulToken}`);
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+
+    // Verify note still exists in database
+    const check = db.prepare('SELECT id FROM student_notes WHERE id = ?').get(testNoteId);
+    assert.ok(check);
+  });
+
+  test('42. Student can update their own note (auto-save/edit)', async () => {
+    const res = await request(app)
+      .put(`/api/student/notes/${testNoteId}`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        title: 'Updated Security Concept',
+        content: 'Updated content with auto-save verification.',
+        timestamp_seconds: 760
+      });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.note.title, 'Updated Security Concept');
+    assert.equal(res.body.note.content, 'Updated content with auto-save verification.');
+    assert.equal(res.body.note.timestamp_seconds, 760);
+  });
+
+  test('43. Student can search their notes by keyword', async () => {
+    const res = await request(app)
+      .get('/api/student/notes?search=verification')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.notes.length >= 1);
+    assert.ok(res.body.notes.some(n => n.id === testNoteId));
+  });
+
+  test('44. Student can export notes as Markdown and TXT', async () => {
+    const mdRes = await request(app)
+      .get('/api/student/notes/export?format=md')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(mdRes.status, 200);
+    assert.ok(mdRes.headers['content-disposition'].includes('PASCONX_Student_Notes.md'));
+    assert.match(mdRes.text, /# PASCONX Video Portal - Student Notes/);
+    assert.match(mdRes.text, /Updated Security Concept/);
+
+    const txtRes = await request(app)
+      .get('/api/student/notes/export?format=txt')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(txtRes.status, 200);
+    assert.ok(txtRes.headers['content-disposition'].includes('PASCONX_Student_Notes.txt'));
+    assert.match(txtRes.text, /PASCONX VIDEO PORTAL - STUDENT NOTES/);
+  });
+
+  test('45. Student can delete their own note', async () => {
+    const res = await request(app)
+      .delete(`/api/student/notes/${testNoteId}`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+
+    // Verify it is gone
+    const check = db.prepare('SELECT * FROM student_notes WHERE id = ?').get(testNoteId);
+    assert.equal(check, undefined);
+  });
 });
 

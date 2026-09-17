@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../api/client.js';
 import SecureVideoPlayer from '../../components/video/SecureVideoPlayer.jsx';
+import NotesPanel from '../../components/notes/NotesPanel.jsx';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -11,18 +12,24 @@ import {
   BookOpen, 
   Lock, 
   Clock, 
-  AlertCircle 
+  AlertCircle,
+  FileText,
+  Info
 } from 'lucide-react';
 
 export default function VideoWatchPage() {
   const { videoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saveStatus, setSaveStatus] = useState('');
+  const [activeTab, setActiveTab] = useState('notes'); // 'notes' | 'about' for mobile view
+
+  const playerControlRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -51,6 +58,26 @@ export default function VideoWatchPage() {
     };
   }, [videoId]);
 
+  // Handle URL timestamp parameter (e.g., /student/watch/12?t=345)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tParam = params.get('t');
+    if (tParam && !isNaN(tParam)) {
+      const targetSec = Number(tParam);
+      // Attempt seek once player is ready
+      const checkAndSeek = (attempts = 0) => {
+        if (attempts > 10) return;
+        if (playerControlRef.current && typeof playerControlRef.current.seekTo === 'function') {
+          playerControlRef.current.seekTo(targetSec);
+        } else {
+          setTimeout(() => checkAndSeek(attempts + 1), 400);
+        }
+      };
+      const timer = setTimeout(() => checkAndSeek(0), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [location.search, videoId]);
+
   const handleProgressUpdate = async (seconds, completed) => {
     try {
       await api.post(`/student/videos/${videoId}/progress`, {
@@ -61,6 +88,12 @@ export default function VideoWatchPage() {
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (err) {
       console.error('Failed to sync playback progress:', err);
+    }
+  };
+
+  const handleSeek = (seconds) => {
+    if (playerControlRef.current && typeof playerControlRef.current.seekTo === 'function') {
+      playerControlRef.current.seekTo(seconds);
     }
   };
 
@@ -110,8 +143,8 @@ export default function VideoWatchPage() {
   const { video, playback, progress, navigation } = data;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* Top Navigation */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* Top Navigation Bar */}
       <div className="flex items-center justify-between">
         <Link
           to={`/student/courses/${video.course_id}`}
@@ -121,11 +154,21 @@ export default function VideoWatchPage() {
           ← Back to Course
         </Link>
 
-        {saveStatus && (
-          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 animate-pulse">
-            {saveStatus}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {saveStatus && (
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 animate-pulse">
+              {saveStatus}
+            </span>
+          )}
+
+          <Link
+            to="/student/notes"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-cyan-400 transition-colors px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs"
+          >
+            <FileText className="w-3.5 h-3.5 text-brand-500" />
+            <span>All My Notes</span>
+          </Link>
+        </div>
       </div>
 
       {/* Course & Video Header */}
@@ -138,51 +181,103 @@ export default function VideoWatchPage() {
         </h1>
       </div>
 
-      {/* Unified Secure Video Player (Routes to YouTube or Widevine DRM) */}
-      <SecureVideoPlayer
-        video={video}
-        playback={playback}
-        progress={progress}
-        onProgressUpdate={handleProgressUpdate}
-        student={user}
-        watermarkProfile={data?.watermarkProfile}
-      />
+      {/* Responsive Workspace Grid: Video Player + Notes Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Player, Video Info, Navigation (8 cols on desktop) */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+          {/* Unified Secure Video Player (Routes to YouTube or Widevine DRM) */}
+          <SecureVideoPlayer
+            video={video}
+            playback={playback}
+            progress={progress}
+            onProgressUpdate={handleProgressUpdate}
+            student={user}
+            watermarkProfile={data?.watermarkProfile}
+            playerControlRef={playerControlRef}
+          />
 
-      {/* Description & Navigation Footer */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6 transition-colors">
-        <div className="space-y-2">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">About This Session</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            {video.description || 'No additional lesson notes provided for this video.'}
-          </p>
+          {/* Mobile Tabs Switcher (Visible only on screens below lg) */}
+          <div className="flex lg:hidden items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('about')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${
+                activeTab === 'about'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>About Session</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('notes')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${
+                activeTab === 'notes'
+                  ? 'bg-white dark:bg-slate-900 text-brand-600 dark:text-cyan-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>📝 My Notes</span>
+            </button>
+          </div>
+
+          {/* Description & Course Navigation */}
+          <div className={`space-y-6 ${activeTab === 'notes' ? 'hidden lg:block' : 'block'}`}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6 transition-colors">
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                  About This Session
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {video.description || 'No additional lesson notes provided for this video.'}
+                </p>
+              </div>
+
+              {/* Previous & Next Navigation Controls */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                {navigation.prevVideo ? (
+                  <Link
+                    to={`/student/watch/${navigation.prevVideo.id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Previous: {navigation.prevVideo.title}</span>
+                  </Link>
+                ) : (
+                  <div />
+                )}
+
+                {navigation.nextVideo ? (
+                  <Link
+                    to={`/student/watch/${navigation.nextVideo.id}`}
+                    className="btn-edtech-purple inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold transition-all shadow-sm"
+                  >
+                    <span>Next Video →</span>
+                  </Link>
+                ) : (
+                  <div className="text-xs text-slate-400 dark:text-slate-500 font-medium italic">
+                    End of course modules
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Previous & Next Navigation Controls */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
-          {navigation.prevVideo ? (
-            <Link
-              to={`/student/watch/${navigation.prevVideo.id}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Previous: {navigation.prevVideo.title}</span>
-            </Link>
-          ) : (
-            <div />
-          )}
-
-          {navigation.nextVideo ? (
-            <Link
-              to={`/student/watch/${navigation.nextVideo.id}`}
-              className="btn-edtech-purple inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold transition-all shadow-sm"
-            >
-              <span>Next Video →</span>
-            </Link>
-          ) : (
-            <div className="text-xs text-slate-400 dark:text-slate-500 font-medium italic">
-              End of course modules
-            </div>
-          )}
+        {/* Right Column: Student Notes Panel (4 cols on desktop, full width on mobile) */}
+        <div className={`lg:col-span-5 xl:col-span-4 sticky top-20 ${activeTab === 'about' ? 'hidden lg:block' : 'block'}`}>
+          <div className="h-[620px] lg:h-[680px]">
+            <NotesPanel
+              videoId={videoId}
+              courseId={video.course_id}
+              student={user}
+              playerControlRef={playerControlRef}
+              onSeek={handleSeek}
+            />
+          </div>
         </div>
       </div>
     </div>

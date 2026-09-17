@@ -24,7 +24,8 @@ export default function YouTubePlayer({
   privacyType = 'youtube_unlisted',
   disclaimer,
   student,
-  watermarkProfile
+  watermarkProfile,
+  playerControlRef
 }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
@@ -47,6 +48,30 @@ export default function YouTubePlayer({
   const [isCcEnabled, setIsCcEnabled] = useState(false);
 
   const { isBlackedOut, alertReason, resumePlayback } = useScreenSecurity();
+
+  // Expose player control interface for notes timestamp capture & seeking
+  useEffect(() => {
+    if (playerControlRef) {
+      playerControlRef.current = {
+        getCurrentTime: () => {
+          try {
+            if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
+              return Math.round(playerRef.current.getCurrentTime());
+            }
+          } catch (e) {}
+          return currentSeconds || 0;
+        },
+        seekTo: (sec) => {
+          try {
+            if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+              playerRef.current.seekTo(sec, true);
+              setCurrentSeconds(sec);
+            }
+          } catch (e) {}
+        }
+      };
+    }
+  }, [playerControlRef, currentSeconds]);
 
   // Instantly pause video if blackout veil triggers (screenshot attempt / focus loss)
   useEffect(() => {

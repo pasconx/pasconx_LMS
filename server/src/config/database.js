@@ -98,6 +98,18 @@ export function initDatabase() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS student_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      timestamp_seconds INTEGER DEFAULT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS security_audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -115,6 +127,9 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_videos_course ON videos(course_id, order_index);
     CREATE INDEX IF NOT EXISTS idx_progress_student_video ON video_progress(student_id, video_id);
     CREATE INDEX IF NOT EXISTS idx_documents_course ON course_documents(course_id, order_index);
+    CREATE INDEX IF NOT EXISTS idx_notes_student ON student_notes(student_id);
+    CREATE INDEX IF NOT EXISTS idx_notes_video ON student_notes(student_id, video_id);
+    CREATE INDEX IF NOT EXISTS idx_notes_course ON student_notes(student_id, course_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON security_audit_logs(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_event ON security_audit_logs(event_type, created_at);
   `;

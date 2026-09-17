@@ -14,7 +14,8 @@ import {
   Video, 
   KeyRound, 
   Settings,
-  LayoutDashboard
+  LayoutDashboard,
+  FileText
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -33,6 +34,7 @@ export default function Navbar() {
   const studentLinks = [
     { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
     { label: 'My Courses', path: '/student/courses', icon: BookOpen },
+    { label: 'My Notes', path: '/student/notes', icon: FileText },
     { label: 'Profile', path: '/student/profile', icon: User }
   ];
 

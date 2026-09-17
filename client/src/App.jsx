@@ -12,6 +12,7 @@ import StudentDashboard from './pages/student/StudentDashboard.jsx';
 import CourseDetailPage from './pages/student/CourseDetailPage.jsx';
 import VideoWatchPage from './pages/student/VideoWatchPage.jsx';
 import StudentProfile from './pages/student/StudentProfile.jsx';
+import AllNotesPage from './pages/student/AllNotesPage.jsx';
 import AdminDashboard from './pages/admin/AdminDashboard.jsx';
 import StudentsManagement from './pages/admin/StudentsManagement.jsx';
 import CoursesManagement from './pages/admin/CoursesManagement.jsx';
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="/student/courses" element={<StudentDashboard />} />
               <Route path="/student/courses/:courseId" element={<CourseDetailPage />} />
               <Route path="/student/watch/:videoId" element={<VideoWatchPage />} />
+              <Route path="/student/notes" element={<AllNotesPage />} />
               <Route path="/student/profile" element={<StudentProfile />} />
             </Route>
 

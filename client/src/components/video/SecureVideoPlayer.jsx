@@ -15,7 +15,8 @@ export default function SecureVideoPlayer({
   progress,
   onProgressUpdate,
   student,
-  watermarkProfile
+  watermarkProfile,
+  playerControlRef
 }) {
   const isWidevine = video?.video_type === 'widevine' || playback?.provider === 'widevine';
 
@@ -34,6 +35,7 @@ export default function SecureVideoPlayer({
           disclaimer={playback?.disclaimer}
           student={student}
           watermarkProfile={watermarkProfile}
+          playerControlRef={playerControlRef}
         />
       ) : (
         <YouTubePlayer
@@ -45,6 +47,7 @@ export default function SecureVideoPlayer({
           disclaimer={playback?.disclaimer}
           student={student}
           watermarkProfile={watermarkProfile}
+          playerControlRef={playerControlRef}
         />
       )}
     </ScreenCaptureGuard>
