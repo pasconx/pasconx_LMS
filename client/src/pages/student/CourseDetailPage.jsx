@@ -106,7 +106,7 @@ export default function CourseDetailPage() {
       {/* Navigation Header */}
       <div>
         <Link
-          to="/student/dashboard"
+          to="/student/courses"
           className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-brand-600 dark:hover:text-cyan-400 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

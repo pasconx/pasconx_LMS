@@ -235,7 +235,9 @@ export default function Navbar() {
             <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 mx-2 shrink-0">
               {studentLinks.map((link) => {
                 const Icon = link.icon;
-                const isActive = location.pathname === link.path;
+                const isActive = link.path === '/student/courses'
+                  ? location.pathname.startsWith('/student/courses')
+                  : location.pathname === link.path;
                 return (
                   <Link
                     key={link.path}
@@ -318,7 +320,9 @@ export default function Navbar() {
 
           {(isAdmin ? mobileAdminLinks : studentLinks).map((link) => {
             const Icon = link.icon;
-            const isActive = location.pathname === link.path;
+            const isActive = (!isAdmin && link.path === '/student/courses')
+              ? location.pathname.startsWith('/student/courses')
+              : location.pathname === link.path;
             return (
               <Link
                 key={link.path}

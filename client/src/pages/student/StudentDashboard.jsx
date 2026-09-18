@@ -18,6 +18,61 @@ import {
 } from 'lucide-react';
 import MeetingDetailsModal, { formatMeetingTimeIST } from '../../components/meetings/MeetingDetailsModal.jsx';
 
+function normalizeThumbnailUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+
+  const driveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i)
+    || trimmed.match(/drive\.google\.com\/(?:uc|open)\?(?:.*&)?id=([a-zA-Z0-9_-]+)/i);
+
+  if (driveMatch && driveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+  }
+
+  return trimmed;
+}
+
+function CourseThumbnail({ url, title }) {
+  const [currentSrc, setCurrentSrc] = useState(() => normalizeThumbnailUrl(url));
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setCurrentSrc(normalizeThumbnailUrl(url));
+    setHasError(false);
+  }, [url]);
+
+  const handleError = () => {
+    const driveMatch = currentSrc?.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/i);
+    if (driveMatch && driveMatch[1]) {
+      const proxyUrl = `/api/proxy/thumbnail?id=${driveMatch[1]}`;
+      if (currentSrc !== proxyUrl) {
+        setCurrentSrc(proxyUrl);
+        return;
+      }
+    }
+    setHasError(true);
+  };
+
+  if (currentSrc && !hasError) {
+    return (
+      <img
+        src={currentSrc}
+        alt={title}
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
+        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+        onError={handleError}
+      />
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 text-white font-bold text-xl">
+      {title ? title.substring(0, 2).toUpperCase() : 'CO'}
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
@@ -225,7 +280,16 @@ export default function StudentDashboard() {
             <BookOpen className="w-5 h-5 text-brand-600 dark:text-cyan-400" />
             My Active Courses
           </h2>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{activeCourses.length} Enrolled</span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{activeCourses.length} Enrolled</span>
+            <Link
+              to="/student/courses"
+              className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 dark:text-cyan-400 hover:underline"
+            >
+              <span>View All Courses</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
         {activeCourses.length === 0 ? (
@@ -247,17 +311,7 @@ export default function StudentDashboard() {
               >
                 {/* Course Thumbnail */}
                 <div className="h-44 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
-                  {course.thumbnail_url ? (
-                    <img
-                      src={course.thumbnail_url}
-                      alt={course.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 text-white font-bold text-xl">
-                      {course.title.substring(0, 2).toUpperCase()}
-                    </div>
-                  )}
+                  <CourseThumbnail url={course.thumbnail_url} title={course.title} />
                   <div className="absolute top-3 right-3">
                     <StatusBadge status={course.enrollment_status} isExpired={false} />
                   </div>

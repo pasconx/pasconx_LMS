@@ -16,6 +16,63 @@ import {
   ShieldAlert
 } from 'lucide-react';
 
+export function normalizeThumbnailUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+
+  // Automatically convert Google Drive share links to direct Google User Content CDN URLs
+  const driveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i)
+    || trimmed.match(/drive\.google\.com\/(?:uc|open)\?(?:.*&)?id=([a-zA-Z0-9_-]+)/i);
+
+  if (driveMatch && driveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+  }
+
+  return trimmed;
+}
+
+export function CourseThumbnail({ url, title }) {
+  const [currentSrc, setCurrentSrc] = useState(() => normalizeThumbnailUrl(url));
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setCurrentSrc(normalizeThumbnailUrl(url));
+    setHasError(false);
+  }, [url]);
+
+  const handleError = () => {
+    // If direct Google UserContent CDN fails (e.g. browser Referer 429), fall back to backend proxy
+    const driveMatch = currentSrc?.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/i);
+    if (driveMatch && driveMatch[1]) {
+      const proxyUrl = `/api/proxy/thumbnail?id=${driveMatch[1]}`;
+      if (currentSrc !== proxyUrl) {
+        setCurrentSrc(proxyUrl);
+        return;
+      }
+    }
+    setHasError(true);
+  };
+
+  if (currentSrc && !hasError) {
+    return (
+      <img
+        src={currentSrc}
+        alt={title}
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
+        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+        onError={handleError}
+      />
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 text-white font-bold text-lg">
+      {title ? title.substring(0, 2).toUpperCase() : 'CO'}
+    </div>
+  );
+}
+
 export default function CoursesManagement() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +116,12 @@ export default function CoursesManagement() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await api.post('/admin/courses', formData);
+      const res = await api.post('/admin/courses', {
+        ...formData,
+        title: formData.title.trim(),
+        description: formData.description ? formData.description.trim() : '',
+        thumbnail_url: normalizeThumbnailUrl(formData.thumbnail_url)
+      });
       if (res.success) {
         notify('success', `Course "${res.course.title}" created successfully.`);
         setIsCreateOpen(false);
@@ -75,12 +137,21 @@ export default function CoursesManagement() {
 
   const handleEditCourse = async (e) => {
     e.preventDefault();
+    if (!formData.title || !formData.title.trim()) {
+      notify('error', 'Course title is required.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await api.put(`/admin/courses/${selectedCourse.id}`, formData);
+      const res = await api.put(`/admin/courses/${selectedCourse.id}`, {
+        title: formData.title.trim(),
+        description: formData.description ? formData.description.trim() : '',
+        thumbnail_url: normalizeThumbnailUrl(formData.thumbnail_url)
+      });
       if (res.success) {
-        notify('success', 'Course updated successfully.');
+        notify('success', `Course "${res.course.title}" updated successfully.`);
         setIsEditOpen(false);
+        setSelectedCourse(null);
         fetchCourses();
       }
     } catch (err) {
@@ -171,17 +242,7 @@ export default function CoursesManagement() {
                   className="block h-44 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative cursor-pointer"
                   title={`Manage videos for ${course.title}`}
                 >
-                  {course.thumbnail_url ? (
-                    <img
-                      src={course.thumbnail_url}
-                      alt={course.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 text-white font-bold text-lg">
-                      {course.title.substring(0, 2).toUpperCase()}
-                    </div>
-                  )}
+                  <CourseThumbnail url={course.thumbnail_url} title={course.title} />
                   <div className="absolute top-3 right-3">
                     <StatusBadge status={course.status} />
                   </div>
@@ -217,40 +278,40 @@ export default function CoursesManagement() {
 
               {/* Actions Footer */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                <Link
-                  to={`/admin/videos?courseId=${course.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-cyan-400 hover:text-indigo-800 dark:hover:text-cyan-300 cursor-pointer transition-colors"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  Manage Videos ({course.total_videos})
-                </Link>
-
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
                       setSelectedCourse(course);
                       setFormData({
-                        title: course.title,
+                        title: course.title || '',
                         description: course.description || '',
-                        thumbnail_url: course.thumbnail_url || '',
-                        status: course.status
+                        thumbnail_url: course.thumbnail_url || ''
                       });
                       setIsEditOpen(true);
                     }}
-                    className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-cyan-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800/50 transition-colors cursor-pointer"
                     title="Edit Course"
                   >
                     <Edit className="w-3.5 h-3.5" />
+                    Edit
                   </button>
 
-                  <button
-                    onClick={() => handleDeleteCourse(course.id, course.title)}
-                    className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
-                    title="Delete Course"
+                  <Link
+                    to={`/admin/videos?courseId=${course.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <Video className="w-3.5 h-3.5" />
+                    Manage Videos ({course.total_videos})
+                  </Link>
                 </div>
+
+                <button
+                  onClick={() => handleDeleteCourse(course.id, course.title)}
+                  className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                  title="Delete Course"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           ))}
@@ -266,51 +327,62 @@ export default function CoursesManagement() {
       >
         <form onSubmit={handleCreateCourse} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Course Title</label>
+            <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">Course Title</label>
             <input
               type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="e.g. Cybersecurity Fundamentals"
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full text-xs p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Description</label>
+            <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">Description</label>
             <textarea
               rows={3}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Summary of course objectives and syllabus..."
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full text-xs p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Thumbnail Image URL</label>
+            <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">Thumbnail Image URL</label>
             <input
               type="url"
               value={formData.thumbnail_url}
               onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })}
-              placeholder="https://images.unsplash.com/photo-..."
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="https://images.unsplash.com/photo-... or Google Drive link"
+              className="w-full text-xs p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+              Supports Google Drive sharing links (set to &quot;Anyone with the link can view&quot;) or direct image URLs.
+            </p>
+            {formData.thumbnail_url && (
+              <div className="mt-2.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Live Image Preview:</div>
+                <div className="h-28 w-48 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-2xs">
+                  <CourseThumbnail url={formData.thumbnail_url} title={formData.title || 'Course'} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="pt-2 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setIsCreateOpen(false)}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50"
+              className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold disabled:opacity-50 cursor-pointer"
             >
               {submitting ? 'Creating...' : 'Create Course'}
             </button>
@@ -321,66 +393,74 @@ export default function CoursesManagement() {
       {/* Edit Course Modal */}
       <Modal
         isOpen={isEditOpen}
-        onClose={() => setIsEditOpen(false)}
+        onClose={() => {
+          setIsEditOpen(false);
+          setSelectedCourse(null);
+        }}
         title="Edit Course"
-        subtitle={`Updating course: ${selectedCourse?.title}`}
+        subtitle={`Updating course: ${selectedCourse?.title || ''}`}
       >
         <form onSubmit={handleEditCourse} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Course Title</label>
+            <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">Course Title</label>
             <input
               type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="e.g. Cybersecurity Fundamentals"
+              className="w-full text-xs p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Description</label>
+            <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">Description</label>
             <textarea
               rows={3}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="Summary of course objectives and syllabus..."
+              className="w-full text-xs p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Thumbnail Image URL</label>
+            <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">Thumbnail Image URL</label>
             <input
               type="url"
               value={formData.thumbnail_url}
               onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="https://images.unsplash.com/photo-... or Google Drive link"
+              className="w-full text-xs p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Status</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-            >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="ARCHIVED">ARCHIVED</option>
-            </select>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+              Supports Google Drive sharing links (set to &quot;Anyone with the link can view&quot;) or direct image URLs.
+            </p>
+            {formData.thumbnail_url && (
+              <div className="mt-2.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Live Image Preview:</div>
+                <div className="h-28 w-48 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-2xs">
+                  <CourseThumbnail url={formData.thumbnail_url} title={formData.title || 'Course'} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="pt-2 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setIsEditOpen(false)}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50"
+              onClick={() => {
+                setIsEditOpen(false);
+                setSelectedCourse(null);
+              }}
+              className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold disabled:opacity-50 cursor-pointer"
             >
               {submitting ? 'Saving...' : 'Save Changes'}
             </button>

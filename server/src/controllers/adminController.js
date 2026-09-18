@@ -253,6 +253,22 @@ function getCoursesSqlite(req, res, next) {
   }
 }
 
+function normalizeThumbnailUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  // Automatically convert Google Drive share links to direct Google User Content CDN URLs
+  const driveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i)
+    || trimmed.match(/drive\.google\.com\/(?:uc|open)\?(?:.*&)?id=([a-zA-Z0-9_-]+)/i);
+
+  if (driveMatch && driveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+  }
+
+  return trimmed;
+}
+
 function createCourseSqlite(req, res, next) {
   try {
     const { title, description, thumbnail_url } = req.body;
@@ -271,7 +287,7 @@ function createCourseSqlite(req, res, next) {
     const result = stmt.run(
       title.trim(),
       description ? description.trim() : '',
-      thumbnail_url ? thumbnail_url.trim() : null
+      normalizeThumbnailUrl(thumbnail_url)
     );
 
     const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(result.lastInsertRowid);
@@ -291,34 +307,35 @@ function updateCourseSqlite(req, res, next) {
     const courseId = Number(req.params.id);
     const { title, description, thumbnail_url, status } = req.body;
 
-    if (!title || !title.trim()) {
+    if (!title || typeof title !== 'string' || !title.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Course title is required.'
       });
     }
 
-    const courseStatus = status && ['ACTIVE', 'ARCHIVED'].includes(status) ? status : 'ACTIVE';
+    const existing = db.prepare('SELECT id, status FROM courses WHERE id = ?').get(courseId);
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Course not found.'
+      });
+    }
+
+    const courseStatus = status && ['ACTIVE', 'ARCHIVED'].includes(status) ? status : existing.status;
 
     const stmt = db.prepare(`
       UPDATE courses 
       SET title = ?, description = ?, thumbnail_url = ?, status = ?, updated_at = datetime('now')
       WHERE id = ?
     `);
-    const result = stmt.run(
+    stmt.run(
       title.trim(),
-      description ? description.trim() : '',
-      thumbnail_url ? thumbnail_url.trim() : null,
+      typeof description === 'string' ? description.trim() : '',
+      normalizeThumbnailUrl(thumbnail_url),
       courseStatus,
       courseId
     );
-
-    if (result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Course not found.'
-      });
-    }
 
     const updated = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
 
@@ -1410,7 +1427,7 @@ async function createCourseSupabase(req, res, next) {
       .insert({
         title: title.trim(),
         description: description ? description.trim() : '',
-        thumbnail_url: thumbnail_url ? thumbnail_url.trim() : null,
+        thumbnail_url: normalizeThumbnailUrl(thumbnail_url),
         status: 'ACTIVE',
         created_by: req.user?.id || null
       })
@@ -1434,21 +1451,36 @@ async function updateCourseSupabase(req, res, next) {
     const courseId = Number(req.params.id);
     const { title, description, thumbnail_url, status } = req.body;
 
-    if (!title || !title.trim()) {
+    if (!title || typeof title !== 'string' || !title.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Course title is required.'
       });
     }
 
-    const courseStatus = status && ['ACTIVE', 'ARCHIVED'].includes(status) ? status : 'ACTIVE';
+    // Verify course exists and retrieve existing record to preserve status if omitted
+    const { data: existing, error: existErr } = await supabase
+      .from('courses')
+      .select('id, status, created_by')
+      .eq('id', courseId)
+      .maybeSingle();
+
+    if (existErr) throw existErr;
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Course not found.'
+      });
+    }
+
+    const courseStatus = status && ['ACTIVE', 'ARCHIVED'].includes(status) ? status : existing.status;
 
     const { data: updated, error } = await supabase
       .from('courses')
       .update({
         title: title.trim(),
-        description: description ? description.trim() : '',
-        thumbnail_url: thumbnail_url ? thumbnail_url.trim() : null,
+        description: typeof description === 'string' ? description.trim() : '',
+        thumbnail_url: normalizeThumbnailUrl(thumbnail_url),
         status: courseStatus,
         updated_at: new Date().toISOString()
       })
@@ -1457,12 +1489,6 @@ async function updateCourseSupabase(req, res, next) {
       .maybeSingle();
 
     if (error) throw error;
-    if (!updated) {
-      return res.status(404).json({
-        success: false,
-        error: 'Course not found.'
-      });
-    }
 
     return res.json({
       success: true,
