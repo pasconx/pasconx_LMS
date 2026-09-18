@@ -12,7 +12,8 @@ import {
   Users, 
   CheckCircle, 
   AlertCircle,
-  ExternalLink 
+  ExternalLink,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function CoursesManagement() {

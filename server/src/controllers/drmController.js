@@ -1,4 +1,5 @@
 import { db } from '../config/database.js';
+import { supabase } from '../config/supabase.js';
 import { verifySignedToken } from '../utils/tokenSigner.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
 
@@ -41,34 +42,68 @@ export async function handleWidevineLicense(req, res, next) {
       });
     }
 
-    const studentId = tokenPayload.data.userId;
-    const targetVideoId = videoId || tokenPayload.data.resourceId;
+    const studentId = tokenPayload.payload?.uid || tokenPayload.data?.userId;
+    const targetVideoId = videoId || tokenPayload.payload?.rid || tokenPayload.data?.resourceId;
 
     // 2. Validate student enrollment and video status
-    const video = db.prepare(`
-      SELECT v.*, c.status AS course_status 
-      FROM videos v
-      JOIN courses c ON v.course_id = c.id
-      WHERE v.id = ?
-    `).get(Number(targetVideoId));
+    let video;
+    let enrollment;
 
-    if (!video || video.status !== 'ACTIVE' || video.course_status !== 'ACTIVE') {
-      return res.status(404).json({
-        success: false,
-        error: 'Requested DRM video is unavailable.'
-      });
-    }
+    if (process.env.DATA_BACKEND === 'supabase' && supabase) {
+      const { data: v, error: vErr } = await supabase
+        .from('videos')
+        .select('*, courses!inner(status)')
+        .eq('id', Number(targetVideoId))
+        .maybeSingle();
 
-    const enrollment = db.prepare(`
-      SELECT * FROM enrollments
-      WHERE student_id = ? AND course_id = ?
-    `).get(studentId, video.course_id);
+      if (vErr || !v || v.status !== 'ACTIVE' || v.courses?.status !== 'ACTIVE') {
+        return res.status(404).json({
+          success: false,
+          error: 'Requested DRM video is unavailable.'
+        });
+      }
+      video = v;
 
-    if (!enrollment || enrollment.status !== 'ACTIVE') {
-      return res.status(403).json({
-        success: false,
-        error: 'Student is not actively enrolled in this course.'
-      });
+      const { data: e, error: eErr } = await supabase
+        .from('enrollments')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('course_id', video.course_id)
+        .maybeSingle();
+
+      if (eErr || !e || e.status !== 'ACTIVE') {
+        return res.status(403).json({
+          success: false,
+          error: 'Student is not actively enrolled in this course.'
+        });
+      }
+      enrollment = e;
+    } else {
+      video = db.prepare(`
+        SELECT v.*, c.status AS course_status 
+        FROM videos v
+        JOIN courses c ON v.course_id = c.id
+        WHERE v.id = ?
+      `).get(Number(targetVideoId));
+
+      if (!video || video.status !== 'ACTIVE' || video.course_status !== 'ACTIVE') {
+        return res.status(404).json({
+          success: false,
+          error: 'Requested DRM video is unavailable.'
+        });
+      }
+
+      enrollment = db.prepare(`
+        SELECT * FROM enrollments
+        WHERE student_id = ? AND course_id = ?
+      `).get(studentId, video.course_id);
+
+      if (!enrollment || enrollment.status !== 'ACTIVE') {
+        return res.status(403).json({
+          success: false,
+          error: 'Student is not actively enrolled in this course.'
+        });
+      }
     }
 
     const now = new Date().toISOString();

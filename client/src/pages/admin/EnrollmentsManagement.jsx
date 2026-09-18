@@ -11,7 +11,8 @@ import {
   Edit3, 
   CheckCircle, 
   AlertCircle,
-  AlertTriangle 
+  AlertTriangle,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function EnrollmentsManagement() {

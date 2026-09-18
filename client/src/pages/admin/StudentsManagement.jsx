@@ -13,7 +13,8 @@ import {
   BookOpen, 
   Search, 
   CheckCircle, 
-  AlertCircle 
+  AlertCircle,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function StudentsManagement() {
