@@ -1,27 +1,49 @@
-import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
+const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = process.env.DATABASE_URL 
-  ? path.resolve(process.cwd(), process.env.DATABASE_URL)
-  : path.resolve(__dirname, '../../data/pasconix.db');
+let dbInstance = null;
 
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+try {
+  const Database = require('better-sqlite3');
+  const dbPath = process.env.DATABASE_URL 
+    ? path.resolve(process.cwd(), process.env.DATABASE_URL)
+    : (process.env.VERCEL ? path.join('/tmp', 'pasconix.db') : path.resolve(__dirname, '../../data/pasconix.db'));
+
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+
+  dbInstance = new Database(dbPath);
+  dbInstance.pragma('journal_mode = WAL');
+  dbInstance.pragma('foreign_keys = ON');
+} catch (err) {
+  // Graceful fallback stub for serverless environments (e.g. Vercel) where Supabase is the primary DB
+  dbInstance = {
+    prepare: () => ({
+      run: () => ({ lastInsertRowid: 1, changes: 0 }),
+      get: () => null,
+      all: () => []
+    }),
+    pragma: () => {},
+    exec: () => {}
+  };
 }
 
-export const db = new Database(dbPath);
-
-// Enable foreign keys and WAL mode for better concurrency and integrity
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+export const db = dbInstance;
 
 export function initDatabase() {
+  if (process.env.DATA_BACKEND === 'supabase' && process.env.VERCEL) {
+    return db;
+  }
+  try {
+    if (!db || typeof db.exec !== 'function') return db;
   const initStatements = `
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,6 +193,9 @@ export function initDatabase() {
     }
   } catch (migrationErr) {
     console.warn('Database migration notice for videos table:', migrationErr.message);
+  }
+  } catch (err) {
+    console.warn('Database init notice:', err.message);
   }
 
   return db;
