@@ -179,8 +179,8 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
     assert.equal(res.body.course.title, 'DevSecOps Masterclass');
   });
 
-  // Test 11: Admin can add video
-  test('11. Admin can add video with YouTube provider and unlisted privacy', async () => {
+  // Test 11: Admin can add video with Google Drive provider
+  test('11. Admin can add video with Google Drive provider and full URL auto-extraction', async () => {
     const demoCourse = db.prepare("SELECT id FROM courses WHERE title = 'PASCONX Demo Course'").get();
 
     const res = await request(app)
@@ -190,9 +190,8 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
         title: '04 Bonus Architectural Walkthrough',
         description: 'Deep dive into microservices',
         course_id: demoCourse.id,
-        provider: 'youtube',
-        privacy_type: 'youtube_unlisted',
-        youtube_video_id: 'dQw4w9WgXcQ',
+        provider: 'google_drive',
+        drive_file_id: 'https://drive.google.com/file/d/1fkJOdRIonDNO4YYDSno_0hwcBvlcMbMy/view?usp=drive_link',
         duration_seconds: 480,
         order_index: 4
       });
@@ -200,7 +199,31 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
     assert.equal(res.status, 201);
     assert.equal(res.body.success, true);
     assert.equal(res.body.video.title, '04 Bonus Architectural Walkthrough');
-    assert.equal(res.body.video.external_video_id, 'dQw4w9WgXcQ');
+    assert.equal(res.body.video.external_video_id, '1fkJOdRIonDNO4YYDSno_0hwcBvlcMbMy');
+  });
+
+  // Test 11b: Admin can add video with VdoCipher 32-char hex ID
+  test('11b. Admin can add video with VdoCipher provider and 32-char hex ID', async () => {
+    const demoCourse = db.prepare("SELECT id FROM courses WHERE title = 'PASCONX Demo Course'").get();
+
+    const res = await request(app)
+      .post('/api/admin/videos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        title: 'VdoCipher DRM Lecture',
+        description: 'Multi-DRM protected lecture',
+        course_id: demoCourse.id,
+        provider: 'vdocipher',
+        external_video_id: '44dea8bbc5324ee896da129c132e3a5c',
+        duration_seconds: 300,
+        order_index: 5
+      });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.video.title, 'VdoCipher DRM Lecture');
+    assert.equal(res.body.video.provider, 'vdocipher');
+    assert.equal(res.body.video.external_video_id, '44dea8bbc5324ee896da129c132e3a5c');
   });
 
   // Test 12: Admin can enroll student
@@ -224,10 +247,11 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
     assert.equal(res.body.enrollment.student_id, student.id);
   });
 
-  // Test 13: Student can watch authorized YouTube video
-  test('13. Student can watch authorized YouTube video and receives safe playback payload', async () => {
+  // Test 13: Student can watch authorized Google Drive video
+  test('13. Student can watch authorized Google Drive video and receives safe preview embed payload', async () => {
     // Video 1 in Demo Course
-    const video = db.prepare("SELECT id FROM videos WHERE title = '01 Introduction to PASCONX'").get();
+    const video = db.prepare("SELECT id FROM videos WHERE title LIKE '%01 Introduction to PASCONX%'").get();
+    assert.ok(video, 'Demo course video 1 should exist');
 
     const res = await request(app)
       .get(`/api/student/videos/${video.id}`)
@@ -235,9 +259,9 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
 
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
-    assert.equal(res.body.playback.provider, 'youtube');
-    assert.ok(res.body.playback.embedUrl.includes('youtube.com/embed'));
-    assert.ok(res.body.playback.embedUrl.includes('dQw4w9WgXcQ'));
+    assert.equal(res.body.playback.provider, 'google_drive');
+    assert.equal(res.body.playback.fileId, '1fkJOdRIonDNO4YYDSno_0hwcBvlcMbMy');
+    assert.equal(res.body.playback.embedUrl, 'https://drive.google.com/file/d/1fkJOdRIonDNO4YYDSno_0hwcBvlcMbMy/preview');
   });
 
   // Test 14: Student cannot watch unauthorized video
@@ -264,7 +288,7 @@ describe('PASCONX Video Portal - Automated Integration Tests', () => {
 
   // Test 16: Video playback payload contains STEALTH_CONTENT_MODE metadata and dynamic watermark profile
   test('16. Video playback payload contains STEALTH_CONTENT_MODE metadata and dynamic watermark profile', async () => {
-    const video = db.prepare("SELECT id FROM videos WHERE title = '01 Introduction to PASCONX'").get();
+    const video = db.prepare("SELECT id FROM videos WHERE title LIKE '%01 Introduction to PASCONX%'").get();
 
     const res = await request(app)
       .get(`/api/student/videos/${video.id}`)
