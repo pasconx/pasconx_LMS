@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ThemeToggle from '../../components/common/ThemeToggle.jsx';
+import TurnstileWidget from '../../components/common/TurnstileWidget.jsx';
 import { 
   Lock, 
   Mail, 
@@ -14,6 +15,7 @@ import {
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -27,7 +29,8 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await login(email, password);
+      const res = await login(email, password, turnstileToken);
+
       const destination = res.user.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard';
       navigate(destination, { replace: true });
     } catch (err) {
@@ -121,6 +124,12 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+
+            <TurnstileWidget 
+              onVerify={(token) => setTurnstileToken(token)}
+              onExpire={() => setTurnstileToken(null)}
+              onError={() => setTurnstileToken(null)}
+            />
 
             <button
               type="submit"

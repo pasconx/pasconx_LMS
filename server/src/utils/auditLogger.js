@@ -1,5 +1,6 @@
 import { db } from '../config/database.js';
 import { supabase } from '../config/supabase.js';
+import { getClientIp } from './ipHelper.js';
 
 /**
  * Log security and access events to database audit log.
@@ -20,13 +21,8 @@ export function logSecurityEvent({
     let userAgent = null;
 
     if (req) {
-      // Safely extract client IP
-      const forwarded = req.headers['x-forwarded-for'];
-      ipAddress = forwarded ? forwarded.split(',')[0].trim() : (req.socket?.remoteAddress || req.ip || null);
-      // Clean localhost IPv6 prefix if present
-      if (ipAddress === '::1' || ipAddress === '::ffff:127.0.0.1') {
-        ipAddress = '127.0.0.1';
-      }
+      // Safely extract client IP prioritizing Cloudflare CF-Connecting-IP
+      ipAddress = getClientIp(req);
       userAgent = req.headers['user-agent'] || null;
       if (userAgent && userAgent.length > 255) {
         userAgent = userAgent.substring(0, 255);

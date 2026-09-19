@@ -13,7 +13,9 @@ import adminRoutes from './routes/adminRoutes.js';
 import drmRoutes from './routes/drmRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
+import { verifyCloudflareOrigin } from './middleware/originShield.js';
 import { initDatabase } from './config/database.js';
+import { logger } from './utils/logger.js';
 
 dotenv.config();
 
@@ -26,6 +28,9 @@ const clientDist = path.resolve(__dirname, '../../client/dist');
 
 const app = express();
 
+// Trust reverse proxy (Vercel / Cloudflare edge) so req.ip and req.protocol are accurate
+app.set('trust proxy', 1);
+
 // Security headers with relaxed CSP for YouTube player iframes
 app.use(helmet({
   contentSecurityPolicy: false, // Relaxed for embedding YouTube iframes in client
@@ -33,22 +38,47 @@ app.use(helmet({
 }));
 
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'http://localhost:5173',
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-  'http://localhost:5000'
-];
+  'http://localhost:5000',
+  'https://pasconx.vercel.app'
+].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow during local testing
+      return callback(null, true);
     }
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn(`CORS: blocked untrusted origin in production: ${origin}`);
+      return callback(new Error(`CORS policy violation: origin ${origin} is not allowed.`));
+    }
+    // Allow during local development / testing with warning
+    logger.warn(`CORS: request from non-whitelisted origin in dev mode: ${origin}`);
+    callback(null, true);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'cf-turnstile-response', 'X-Pasconx-Origin-Secret']
 }));
+
+// Cloudflare edge tracking and dynamic API cache protection
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  const cfRay = req.headers['cf-ray'];
+  if (cfRay) {
+    res.setHeader('CF-Ray', cfRay);
+  }
+  next();
+});
+
+// Protect API routes from direct origin bypass if origin secret is configured
+app.use('/api', verifyCloudflareOrigin);
 
 app.use(cookieParser());
 app.use(express.json());

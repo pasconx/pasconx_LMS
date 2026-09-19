@@ -26,14 +26,19 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, []);
 
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password });
+  const login = async (email, password, turnstileToken = null) => {
+    const payload = { email, password };
+    if (turnstileToken) {
+      payload.turnstileToken = turnstileToken;
+    }
+    const res = await api.post('/auth/login', payload);
     if (res.success && res.user) {
       setUser(res.user);
       return res;
     }
     throw new Error(res.error || 'Login failed.');
   };
+
 
   const logout = async () => {
     try {
