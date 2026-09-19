@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { CourseProvider } from './context/CourseContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import Navbar from './components/common/Navbar.jsx';
@@ -67,7 +68,9 @@ export default function App() {
             <Route
               element={
                 <ProtectedRoute allowedRoles={['STUDENT']}>
-                  <MainLayout />
+                  <CourseProvider>
+                    <MainLayout />
+                  </CourseProvider>
                 </ProtectedRoute>
               }
             >

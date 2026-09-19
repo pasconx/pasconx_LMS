@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
-import api from '../../api/client.js';
+import { useCourses } from '../../context/CourseContext.jsx';
 import { StatusBadge } from '../../components/common/Badge.jsx';
 import { 
   BookOpen, 
@@ -74,27 +74,9 @@ function CourseThumbnail({ url, title }) {
 
 export default function MyCoursesPage() {
   const { user } = useAuth();
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { courses, loading, isRefreshing, error, fetchCourses } = useCourses();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'IN_PROGRESS' | 'NOT_STARTED' | 'COMPLETED' | 'EXPIRED'
-
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const res = await api.get('/student/courses');
-        if (res.success) {
-          setCourses(res.courses || []);
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to load your enrolled courses.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCourses();
-  }, []);
 
   const activeCourses = courses.filter(c => c.is_active);
   const expiredCourses = courses.filter(c => c.is_expired);
@@ -143,17 +125,6 @@ export default function MyCoursesPage() {
     { id: 'EXPIRED', label: 'Expired', count: expiredCourses.length }
   ];
 
-  if (loading) {
-    return (
-      <div className="py-20 flex justify-center items-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Loading your enrolled courses...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Page Header Banner */}
@@ -186,9 +157,18 @@ export default function MyCoursesPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-sm text-rose-700 dark:text-rose-300 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-sm text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => fetchCourses(true)}
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Retry
+          </button>
         </div>
       )}
 
@@ -240,7 +220,29 @@ export default function MyCoursesPage() {
       </div>
 
       {/* Courses Cards Grid */}
-      {filteredCourses.length === 0 ? (
+      {loading && courses.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-full h-44 bg-slate-200 dark:bg-slate-800" />
+                <div className="p-5 space-y-3">
+                  <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded-md w-3/4" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-full" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-2/3" />
+                  <div className="pt-2 space-y-1.5">
+                    <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded-full w-full" />
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 pt-0 border-t border-slate-100 dark:border-slate-800/60 mt-4 flex justify-between items-center">
+                <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-24" />
+                <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-xl w-24" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredCourses.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-12 text-center space-y-4 transition-colors">
           <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
             <BookOpen className="w-7 h-7" />

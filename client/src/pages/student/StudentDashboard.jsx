@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useCourses } from '../../context/CourseContext.jsx';
 import api from '../../api/client.js';
 import { StatusBadge } from '../../components/common/Badge.jsx';
 import { 
@@ -75,32 +76,27 @@ function CourseThumbnail({ url, title }) {
 
 export default function StudentDashboard() {
   const { user } = useAuth();
-  const [courses, setCourses] = useState([]);
+  const { courses, loading: coursesLoading, error: coursesError } = useCourses();
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(true);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [meetingError, setMeetingError] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [courseRes, meetingRes] = await Promise.all([
-          api.get('/student/courses'),
-          api.get('/student/meetings?limit=4')
-        ]);
-        if (courseRes.success) {
-          setCourses(courseRes.courses);
+    let isMounted = true;
+    api.get('/student/meetings?limit=4')
+      .then(res => {
+        if (isMounted && res.success) {
+          setUpcomingMeetings(res.meetings || []);
         }
-        if (meetingRes.success) {
-          setUpcomingMeetings(meetingRes.meetings || []);
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to load dashboard data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+      })
+      .catch(err => {
+        if (isMounted) setMeetingError(err.message || 'Failed to load upcoming meetings.');
+      })
+      .finally(() => {
+        if (isMounted) setMeetingsLoading(false);
+      });
+    return () => { isMounted = false; };
   }, []);
 
   const activeCourses = courses.filter(c => c.is_active);
@@ -116,16 +112,7 @@ export default function StudentDashboard() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="py-12 flex justify-center items-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 border-3 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Loading your enrolled courses...</p>
-        </div>
-      </div>
-    );
-  }
+  const dashboardError = coursesError || meetingError;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -161,10 +148,10 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {error && (
+      {dashboardError && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
+          <span>{dashboardError}</span>
         </div>
       )}
 
@@ -292,7 +279,26 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {activeCourses.length === 0 ? (
+        {coursesLoading && courses.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="w-full h-44 bg-slate-200 dark:bg-slate-800" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded-md w-3/4" />
+                    <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-full" />
+                    <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-2/3" />
+                  </div>
+                </div>
+                <div className="p-5 pt-0 border-t border-slate-100 dark:border-slate-800/60 mt-4 flex justify-between items-center">
+                  <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-24" />
+                  <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-xl w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : activeCourses.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-3 transition-colors">
             <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
               <BookOpen className="w-6 h-6" />

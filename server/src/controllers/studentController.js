@@ -338,32 +338,31 @@ async function getStudentCoursesSupabase(req, res, next) {
 
     const courseIds = enrollments.map(e => e.course_id);
 
-    // Get total active videos per course
-    const { data: activeVideos, error: vidErr } = await supabase
-      .from('videos')
-      .select('id, course_id')
-      .eq('status', 'ACTIVE')
-      .in('course_id', courseIds);
+    // Fetch active videos count and student completion progress concurrently in parallel
+    const [videosRes, progressRes] = await Promise.all([
+      supabase
+        .from('videos')
+        .select('id, course_id')
+        .eq('status', 'ACTIVE')
+        .in('course_id', courseIds),
+      supabase
+        .from('video_progress')
+        .select('video_id, videos!inner(course_id)')
+        .eq('student_id', studentId)
+        .eq('completed', true)
+        .in('videos.course_id', courseIds)
+    ]);
 
-    if (vidErr) throw vidErr;
+    if (videosRes.error) throw videosRes.error;
+    if (progressRes.error) throw progressRes.error;
 
     const totalVideosMap = {};
-    (activeVideos || []).forEach(v => {
+    (videosRes.data || []).forEach(v => {
       totalVideosMap[v.course_id] = (totalVideosMap[v.course_id] || 0) + 1;
     });
 
-    // Get completed video count for this student
-    const { data: progressRows, error: progErr } = await supabase
-      .from('video_progress')
-      .select('video_id, videos!inner(course_id)')
-      .eq('student_id', studentId)
-      .eq('completed', true)
-      .in('videos.course_id', courseIds);
-
-    if (progErr) throw progErr;
-
     const completedVideosMap = {};
-    (progressRows || []).forEach(p => {
+    (progressRes.data || []).forEach(p => {
       const cid = p.videos?.course_id;
       if (cid) {
         completedVideosMap[cid] = (completedVideosMap[cid] || 0) + 1;

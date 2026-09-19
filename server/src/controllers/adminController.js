@@ -3,6 +3,7 @@ import { db } from '../config/database.js';
 import { supabase, getScopedSupabaseClient } from '../config/supabase.js';
 import { getVideoProvider } from '../providers/index.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
+import { invalidateUserSessions } from '../middleware/auth.js';
 
 // ==============================================================================
 // 1. SQLITE IMPLEMENTATIONS (BASELINE & INSTANT ROLLBACK SAFETY NET)
@@ -1308,6 +1309,10 @@ async function updateStudentStatusSupabase(req, res, next) {
       console.warn(`Supabase Auth ban_duration update notice for ${studentId}:`, authErr.message);
     }
 
+    if (status === 'DISABLED') {
+      invalidateUserSessions(studentId);
+    }
+
     return res.json({
       success: true,
       message: `Student account has been ${status === 'ACTIVE' ? 'enabled' : 'disabled'}.`,
@@ -1352,6 +1357,8 @@ async function resetStudentPasswordSupabase(req, res, next) {
     });
 
     if (authErr) throw authErr;
+
+    invalidateUserSessions(studentId);
 
     logSecurityEvent({
       userId: studentId,

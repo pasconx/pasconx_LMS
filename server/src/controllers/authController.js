@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from '../config/database.js';
 import { supabase, supabaseAuth } from '../config/supabase.js';
-import { JWT_SECRET } from '../middleware/auth.js';
+import { JWT_SECRET, invalidateSessionCache } from '../middleware/auth.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
 
 export const COOKIE_OPTIONS = {
@@ -261,6 +261,11 @@ export async function login(req, res, next) {
 }
 
 export function logout(req, res) {
+  const token = req.cookies?.pasconix_token || req.headers?.authorization?.replace('Bearer ', '');
+  if (token) {
+    invalidateSessionCache(token);
+  }
+
   if (req.user?.id) {
     logSecurityEvent({
       userId: req.user.id,

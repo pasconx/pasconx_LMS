@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { db } from '../config/database.js';
 import { supabase } from '../config/supabase.js';
 
@@ -44,10 +45,53 @@ function authenticateSqliteUser(req, res, next, token) {
   }
 }
 
+// Lightweight in-memory session cache (60 seconds TTL) to avoid redundant remote Supabase auth network calls on every request
+const supabaseSessionCache = new Map();
+const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+function hashToken(token) {
+  if (!token || typeof token !== 'string') return '';
+  return crypto.createHash('sha256').update(token.trim()).digest('hex');
+}
+
+export function extractToken(req) {
+  let token = req.cookies?.pasconix_token;
+  if (!token && req.headers?.authorization) {
+    const parts = req.headers.authorization.split(' ');
+    if (parts.length === 2 && parts[0] === 'Bearer') {
+      token = parts[1];
+    } else if (parts.length === 1 && parts[0].length > 10) {
+      token = parts[0];
+    }
+  }
+  return token ? token.trim() : null;
+}
+
+export function invalidateSessionCache(token) {
+  if (token) {
+    const key = hashToken(token);
+    supabaseSessionCache.delete(key);
+  }
+}
+
+export function invalidateUserSessions(userId) {
+  if (!userId) return;
+  for (const [k, v] of supabaseSessionCache.entries()) {
+    if (v.user?.id === userId) {
+      supabaseSessionCache.delete(k);
+    }
+  }
+}
+
+export function clearSessionCache() {
+  supabaseSessionCache.clear();
+}
+
 /**
- * Supabase Auth verification with public.profiles validation
+ * Supabase Auth verification with public.profiles validation (with in-memory caching)
  */
 async function authenticateSupabaseUser(req, res, next, token) {
+  const tokenKey = hashToken(token);
   try {
     if (!supabase) {
       return res.status(500).json({
@@ -56,9 +100,38 @@ async function authenticateSupabaseUser(req, res, next, token) {
       });
     }
 
+    const now = Date.now();
+
+    // 1. Inspect token expiration directly via JWT payload to prevent serving expired tokens
+    let jwtExpMs = Infinity;
+    try {
+      const decoded = jwt.decode(token);
+      if (decoded && decoded.exp) {
+        jwtExpMs = decoded.exp * 1000;
+        if (now >= jwtExpMs) {
+          supabaseSessionCache.delete(tokenKey);
+          return res.status(401).json({
+            success: false,
+            error: 'Your session has expired. Please log in again.'
+          });
+        }
+      }
+    } catch {
+      // If decoding fails, proceed to Supabase validation
+    }
+
+    // 2. Check in-memory cache
+    const cached = supabaseSessionCache.get(tokenKey);
+    if (cached && now < cached.expiresAt) {
+      req.user = cached.user;
+      return next();
+    }
+
+    // 3. Validate with Supabase remote Auth
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
+      supabaseSessionCache.delete(tokenKey);
       const errMsg = error?.message || '';
       if (errMsg.toLowerCase().includes('expired')) {
         return res.status(401).json({
@@ -72,7 +145,7 @@ async function authenticateSupabaseUser(req, res, next, token) {
       });
     }
 
-    // Validate against public.profiles
+    // 4. Validate against public.profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, name, email, role, status')
@@ -80,6 +153,7 @@ async function authenticateSupabaseUser(req, res, next, token) {
       .single();
 
     if (profileError || !profile) {
+      supabaseSessionCache.delete(tokenKey);
       return res.status(401).json({
         success: false,
         error: 'User account no longer exists.'
@@ -87,6 +161,7 @@ async function authenticateSupabaseUser(req, res, next, token) {
     }
 
     if (profile.status === 'DISABLED') {
+      supabaseSessionCache.delete(tokenKey);
       return res.status(403).json({
         success: false,
         error: 'Your account has been disabled. Please contact the administrator.'
@@ -101,8 +176,27 @@ async function authenticateSupabaseUser(req, res, next, token) {
       status: profile.status
     };
 
+    // 5. Store in cache bounded by whichever expires first: 60s TTL or token expiration
+    const expiresAt = Math.min(now + SESSION_CACHE_TTL_MS, jwtExpMs);
+
+    // Prune expired entries or if map exceeds 1000 entries
+    if (supabaseSessionCache.size > 1000) {
+      for (const [k, v] of supabaseSessionCache.entries()) {
+        if (now >= v.expiresAt || supabaseSessionCache.size > 800) {
+          supabaseSessionCache.delete(k);
+        }
+      }
+    }
+
+    supabaseSessionCache.set(tokenKey, {
+      user: req.user,
+      cachedAt: now,
+      expiresAt: expiresAt
+    });
+
     next();
   } catch (error) {
+    supabaseSessionCache.delete(tokenKey);
     return res.status(401).json({
       success: false,
       error: 'Invalid authentication session.'
@@ -115,14 +209,7 @@ async function authenticateSupabaseUser(req, res, next, token) {
  * routes verification according to DATA_BACKEND, and attaches user to req.
  */
 export function authenticateUser(req, res, next) {
-  let token = req.cookies?.pasconix_token;
-
-  if (!token && req.headers.authorization) {
-    const parts = req.headers.authorization.split(' ');
-    if (parts.length === 2 && parts[0] === 'Bearer') {
-      token = parts[1];
-    }
-  }
+  const token = extractToken(req);
 
   if (!token) {
     return res.status(401).json({
