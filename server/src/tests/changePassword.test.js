@@ -17,7 +17,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env.test') });
 
 // Safe credential access via environment variables (never printed in test outputs)
 const adminEmail = process.env.TEST_ADMIN_EMAIL || 'admin@pasconx.com';
-const adminInitialPassword = process.env.TEST_ADMIN_PASSWORD || 'Admin@12345';
+const adminInitialPassword = process.env.TEST_ADMIN_PASSWORD || 'Salman@rk80!';
 
 const studentEmail = process.env.TEST_STUDENT_EMAIL || 'student@pasconx.com';
 const studentInitialPassword = process.env.TEST_STUDENT_PASSWORD || 'Student@12345';

@@ -37,32 +37,99 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
+// Auto-detect serverless Vercel environment and ensure DATA_BACKEND is supabase
+if (process.env.VERCEL && !process.env.DATA_BACKEND) {
+  process.env.DATA_BACKEND = 'supabase';
+}
+
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://localhost:5000',
-  'https://pasconx.vercel.app'
+  'https://pasconx.vercel.app',
+  'https://pasconx-lms.vercel.app'
 ].filter(Boolean);
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
+if (process.env.ALLOWED_ORIGINS) {
+  process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
+    const trimmed = o.trim();
+    if (trimmed && !allowedOrigins.includes(trimmed)) {
+      allowedOrigins.push(trimmed);
     }
-    if (process.env.NODE_ENV === 'production') {
-      logger.warn(`CORS: blocked untrusted origin in production: ${origin}`);
-      return callback(new Error(`CORS policy violation: origin ${origin} is not allowed.`));
+  });
+}
+
+function isOriginAllowed(origin, req) {
+  // Allow requests with no origin (e.g. same-origin, curl, server-to-server)
+  if (!origin) return true;
+
+  // Check explicit whitelist
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const parsed = new URL(origin);
+
+    // Allow ALL Vercel deployment domains (*.vercel.app)
+    if (parsed.hostname.endsWith('.vercel.app')) {
+      return true;
     }
-    // Allow during local development / testing with warning
-    logger.warn(`CORS: request from non-whitelisted origin in dev mode: ${origin}`);
-    callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'cf-turnstile-response', 'X-Pasconx-Origin-Secret']
-}));
+
+    // Allow localhost / 127.0.0.1 on any port in dev/testing
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      return true;
+    }
+
+    // Allow requests matching host header (same-host origin)
+    const host = req?.headers?.host;
+    if (host && (parsed.host === host || parsed.hostname === host.split(':')[0])) {
+      return true;
+    }
+  } catch (e) {
+    // Malformed origin URL
+  }
+
+  return false;
+}
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (isOriginAllowed(origin, req)) {
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, cf-turnstile-response, X-Pasconx-Origin-Secret');
+
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    return next();
+  }
+
+  // Untrusted origin in production
+  if (process.env.NODE_ENV === 'production') {
+    logger.warn(`CORS: blocked untrusted origin in production: ${origin}`);
+    return res.status(403).json({
+      success: false,
+      error: `CORS policy violation: origin ${origin} is not allowed.`
+    });
+  }
+
+  // Allow in dev mode with warning
+  logger.warn(`CORS: request from non-whitelisted origin in dev mode: ${origin}`);
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 // Cloudflare edge tracking and dynamic API cache protection
 app.use('/api', (req, res, next) => {

@@ -1,6 +1,14 @@
 export function errorHandler(err, req, res, next) {
   console.error('[PASCONX ERROR]', err);
 
+  // If error is from CORS policy violation, return 403 Forbidden with clear reason
+  if (err.message && err.message.startsWith('CORS policy violation')) {
+    return res.status(403).json({
+      success: false,
+      error: err.message
+    });
+  }
+
   // Avoid leaking raw stack traces or internal SQL syntax in production
   const status = err.status || err.statusCode || 500;
   const message = err.clientMessage || (status === 500 ? 'An unexpected server error occurred. Please try again later.' : err.message);

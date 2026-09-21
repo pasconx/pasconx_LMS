@@ -219,7 +219,13 @@ async function loginSupabase(req, res, next) {
       });
     }
 
-    const token = data.session.access_token;
+    const token = data.session?.access_token;
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Login failed: unable to establish session. Please verify your email or contact support.'
+      });
+    }
     res.cookie('pasconix_token', token, COOKIE_OPTIONS);
 
     const safeUser = {
@@ -254,7 +260,7 @@ async function loginSupabase(req, res, next) {
  * Main login handler dispatching based on active DATA_BACKEND
  */
 export async function login(req, res, next) {
-  if (process.env.DATA_BACKEND === 'supabase') {
+  if (process.env.DATA_BACKEND === 'supabase' || (process.env.VERCEL && process.env.DATA_BACKEND !== 'sqlite')) {
     return loginSupabase(req, res, next);
   }
   return loginSqlite(req, res, next);
