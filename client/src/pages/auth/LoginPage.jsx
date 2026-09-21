@@ -8,8 +8,7 @@ import {
   Mail, 
   ArrowRight, 
   ShieldCheck, 
-  AlertCircle,
-  GraduationCap
+  AlertCircle
 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -38,12 +37,6 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickLogin = (quickEmail, quickPassword) => {
-    setEmail(quickEmail);
-    setPassword(quickPassword);
-    setError('');
   };
 
   return (
@@ -100,7 +93,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@pasconx.com"
+                  placeholder="name@example.com"
                   className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800/90 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                 />
               </div>
@@ -149,56 +142,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Logins for Easy Verification */}
-          <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 transition-colors">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center mb-3">
-              Instant Demo Accounts
-            </p>
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('student@pasconx.com', 'Student@12345')}
-                className="w-full text-left px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700/80 hover:border-brand-300 dark:hover:border-cyan-500/50 hover:bg-brand-50/50 dark:hover:bg-slate-800/70 transition-colors flex items-center justify-between text-xs"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Student Account</div>
-                  <div className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">student@pasconx.com</div>
-                </div>
-                <span className="text-[10px] font-bold uppercase bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-cyan-300 px-2 py-0.5 rounded">
-                  Fill
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('rahul@example.com', 'Rahul@12345')}
-                className="w-full text-left px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700/80 hover:border-brand-300 dark:hover:border-cyan-500/50 hover:bg-brand-50/50 dark:hover:bg-slate-800/70 transition-colors flex items-center justify-between text-xs"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Student (Rahul Sharma)</div>
-                  <div className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">rahul@example.com</div>
-                </div>
-                <span className="text-[10px] font-bold uppercase bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-cyan-300 px-2 py-0.5 rounded">
-                  Fill
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@pasconx.com', 'Admin@12345')}
-                className="w-full text-left px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700/80 hover:border-indigo-300 dark:hover:border-purple-500/50 hover:bg-indigo-50/50 dark:hover:bg-slate-800/70 transition-colors flex items-center justify-between text-xs"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Administrator</div>
-                  <div className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">admin@pasconx.com</div>
-                </div>
-                <span className="text-[10px] font-bold uppercase bg-indigo-100 dark:bg-purple-950 text-indigo-800 dark:text-purple-300 px-2 py-0.5 rounded">
-                  Fill
-                </span>
-              </button>
-            </div>
-          </div>
 
           <div className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from '../config/database.js';
 import { supabase, supabaseAuth } from '../config/supabase.js';
-import { JWT_SECRET, invalidateSessionCache } from '../middleware/auth.js';
+import { JWT_SECRET, invalidateSessionCache, invalidateUserSessions } from '../middleware/auth.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
 
 export const COOKIE_OPTIONS = {
@@ -295,3 +295,254 @@ export function getCurrentUser(req, res) {
     user: req.user
   });
 }
+
+/**
+ * SQLite implementation for self-service password change
+ */
+async function changePasswordSqlite(req, res, next, user, currentPassword, newPassword) {
+  try {
+    const dbUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    if (!dbUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User account not found.'
+      });
+    }
+
+    // 1. Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, dbUser.password_hash);
+    if (!isMatch) {
+      logSecurityEvent({
+        userId: user.id,
+        eventType: 'USER_PASSWORD_CHANGE_FAILED',
+        resourceType: 'user',
+        resourceId: user.id,
+        req,
+        status: 'DENIED',
+        details: 'Current password verification failed'
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect.'
+      });
+    }
+
+    // 2. Hash new password and update in database
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    db.prepare(`
+      UPDATE users 
+      SET password_hash = ?, updated_at = datetime('now') 
+      WHERE id = ?
+    `).run(passwordHash, user.id);
+
+    // 3. Invalidate session cache
+    invalidateUserSessions(user.id);
+    const oldToken = req.cookies?.pasconix_token || req.headers?.authorization?.replace(/^Bearer\s+/i, '');
+    if (oldToken) {
+      invalidateSessionCache(oldToken);
+    }
+
+    // 4. Issue fresh JWT and set cookie
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.cookie('pasconix_token', token, COOKIE_OPTIONS);
+
+    // 5. Record security audit log
+    logSecurityEvent({
+      userId: user.id,
+      eventType: 'USER_CHANGED_OWN_PASSWORD',
+      resourceType: 'user',
+      resourceId: user.id,
+      req,
+      status: 'SUCCESS',
+      details: {
+        role: user.role,
+        action: 'SELF_SERVICE_PASSWORD_CHANGE'
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully.',
+      token
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Supabase Auth implementation for self-service password change
+ */
+async function changePasswordSupabase(req, res, next, user, currentPassword, newPassword) {
+  try {
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: 'Supabase authentication service is not configured.'
+      });
+    }
+
+    const authClient = supabaseAuth || supabase;
+
+    // 1. Verify current password against Supabase Auth
+    const { error: verifyError } = await authClient.auth.signInWithPassword({
+      email: user.email.trim(),
+      password: currentPassword
+    });
+
+    if (verifyError) {
+      logSecurityEvent({
+        userId: user.id,
+        eventType: 'USER_PASSWORD_CHANGE_FAILED',
+        resourceType: 'user',
+        resourceId: user.id,
+        req,
+        status: 'DENIED',
+        details: 'Current password verification failed'
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect.'
+      });
+    }
+
+    // 2. Update password in Supabase Auth using service role admin client
+    const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+      password: newPassword
+    });
+
+    if (updateError) {
+      logSecurityEvent({
+        userId: user.id,
+        eventType: 'USER_PASSWORD_CHANGE_FAILED',
+        resourceType: 'user',
+        resourceId: user.id,
+        req,
+        status: 'ERROR',
+        details: updateError.message
+      });
+      return res.status(400).json({
+        success: false,
+        error: updateError.message || 'Failed to update password in authentication service.'
+      });
+    }
+
+    // 3. Invalidate session cache for the user
+    invalidateUserSessions(user.id);
+    const oldToken = req.cookies?.pasconix_token || req.headers?.authorization?.replace(/^Bearer\s+/i, '');
+    if (oldToken) {
+      invalidateSessionCache(oldToken);
+    }
+
+    // 4. Establish a fresh secure session with the new password
+    const { data: newSessionData } = await authClient.auth.signInWithPassword({
+      email: user.email.trim(),
+      password: newPassword
+    });
+
+    let token = null;
+    if (newSessionData?.session?.access_token) {
+      token = newSessionData.session.access_token;
+      res.cookie('pasconix_token', token, COOKIE_OPTIONS);
+    }
+
+    // 5. Record security audit log
+    logSecurityEvent({
+      userId: user.id,
+      eventType: 'USER_CHANGED_OWN_PASSWORD',
+      resourceType: 'user',
+      resourceId: user.id,
+      req,
+      status: 'SUCCESS',
+      details: {
+        role: user.role,
+        action: 'SELF_SERVICE_PASSWORD_CHANGE'
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully.',
+      token
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Self-service change password controller.
+ * The authenticated user (req.user) is the SOLE authority.
+ * Does NOT accept or respect userId/studentId/adminId from client.
+ */
+export async function changePassword(req, res, next) {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    // Validate required fields
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password, new password, and confirmation are required.'
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password and confirmation do not match.'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be at least 6 characters long.'
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be different from current password.'
+      });
+    }
+
+    // Authenticated user identity from session is the only authority
+    const user = req.user;
+    if (!user || !user.id || !user.email) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required.'
+      });
+    }
+
+    if (user.status === 'DISABLED') {
+      logSecurityEvent({
+        userId: user.id,
+        eventType: 'USER_PASSWORD_CHANGE_FAILED',
+        resourceType: 'user',
+        resourceId: user.id,
+        req,
+        status: 'DENIED',
+        details: 'Account is disabled'
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been disabled. Please contact the administrator.'
+      });
+    }
+
+    if (process.env.DATA_BACKEND === 'supabase') {
+      return await changePasswordSupabase(req, res, next, user, currentPassword, newPassword);
+    }
+    return await changePasswordSqlite(req, res, next, user, currentPassword, newPassword);
+  } catch (error) {
+    next(error);
+  }
+}
+

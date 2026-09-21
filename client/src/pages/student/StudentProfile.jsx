@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../api/client.js';
 import { StatusBadge } from '../../components/common/Badge.jsx';
+import ChangePasswordCard from '../../components/common/ChangePasswordCard.jsx';
 import { Mail, Shield, BookOpen, Calendar, GraduationCap, ArrowRight } from 'lucide-react';
 
 export default function StudentProfile() {
@@ -70,6 +71,9 @@ export default function StudentProfile() {
           </div>
         </div>
       </div>
+
+      {/* Self-Service Change Password */}
+      <ChangePasswordCard />
 
       {/* Enrolled Courses Summary */}
       <div className="space-y-4">

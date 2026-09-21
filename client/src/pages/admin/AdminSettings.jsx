@@ -1,4 +1,5 @@
 import React from 'react';
+import ChangePasswordCard from '../../components/common/ChangePasswordCard.jsx';
 import { 
   Settings, 
   ShieldCheck, 
@@ -24,6 +25,10 @@ export default function AdminSettings() {
           Review active video delivery providers, security parameters, and future DRM integration readiness.
         </p>
       </div>
+
+      {/* Admin Self-Service Change Password */}
+      <ChangePasswordCard />
+
 
       {/* Video Provider Abstraction Status */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xs space-y-6 transition-colors">
