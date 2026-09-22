@@ -96,7 +96,7 @@ export default function VideosManagement() {
         setFormData({
           title: '',
           description: '',
-          course_id: selectedCourseFilter || (courses[0]?.id || ''),
+          course_id: selectedCourseFilter || '',
           video_type: 'youtube',
           provider: 'youtube',
           privacy_type: 'youtube_unlisted',
@@ -105,7 +105,7 @@ export default function VideosManagement() {
           license_server_url: '',
           external_video_id: '',
           duration_seconds: 300,
-          order_index: 1,
+          order_index: '',
           status: 'ACTIVE'
         });
         fetchData();
@@ -172,10 +172,11 @@ export default function VideosManagement() {
 
         <button
           onClick={() => {
+            const initialCourseId = selectedCourseFilter || '';
             setFormData({
               title: '',
               description: '',
-              course_id: selectedCourseFilter || (courses[0]?.id || ''),
+              course_id: initialCourseId,
               video_type: 'youtube',
               provider: 'youtube',
               privacy_type: 'youtube_unlisted',
@@ -184,7 +185,7 @@ export default function VideosManagement() {
               license_server_url: '',
               external_video_id: '',
               duration_seconds: 300,
-              order_index: (videos.length + 1),
+              order_index: '',
               status: 'ACTIVE'
             });
             setIsCreateOpen(true);
@@ -558,14 +559,22 @@ export default function VideosManagement() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Order Index</label>
+              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                Order Index <span className="text-rose-500">*</span>
+              </label>
               <input
                 type="number"
                 min="1"
+                step="1"
+                required
                 value={formData.order_index}
                 onChange={(e) => setFormData({ ...formData, order_index: e.target.value })}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                placeholder="e.g. 1, 2, 3..."
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
               />
+              <span className="text-[11px] text-slate-400">
+                Must be unique for this course.
+              </span>
             </div>
           </div>
 
@@ -783,14 +792,21 @@ export default function VideosManagement() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Order Index</label>
+              <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                Order Index <span className="text-rose-500">*</span>
+              </label>
               <input
                 type="number"
                 min="1"
+                step="1"
+                required
                 value={formData.order_index}
                 onChange={(e) => setFormData({ ...formData, order_index: e.target.value })}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
               />
+              <span className="text-[11px] text-slate-400">
+                Must be unique for this course.
+              </span>
             </div>
           </div>
 

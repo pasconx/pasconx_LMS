@@ -474,26 +474,60 @@ function createVideoSqlite(req, res, next) {
       }
     }
 
+    // Validate order_index: must be a positive integer greater than 0
+    if (order_index === undefined || order_index === null || String(order_index).trim() === '') {
+      return res.status(400).json({ success: false, error: 'Order index is required.' });
+    }
+    const parsedOrder = Number(order_index);
+    if (!Number.isInteger(parsedOrder) || parsedOrder <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order index must be a positive integer greater than 0.'
+      });
+    }
+
+    // Check whether a video already exists with this course_id and order_index
+    const existingOrder = db.prepare('SELECT id FROM videos WHERE course_id = ? AND order_index = ?').get(Number(course_id), parsedOrder);
+    if (existingOrder) {
+      return res.status(409).json({
+        success: false,
+        error: `Order #${parsedOrder} already exists for this course. Please choose another order number.`,
+        message: `Order #${parsedOrder} already exists for this course. Please choose another order number.`
+      });
+    }
+
     const stmt = db.prepare(`
       INSERT INTO videos (
         course_id, title, description, video_type, provider, privacy_type, external_video_id, manifest_url, license_server_url, duration_seconds, order_index, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const result = stmt.run(
-      Number(course_id),
-      title.trim(),
-      description ? description.trim() : '',
-      video_type,
-      resolvedProvider,
-      resolvedPrivacyType,
-      cleanVideoId,
-      manifest_url ? manifest_url.trim() : null,
-      license_server_url ? license_server_url.trim() : null,
-      parseInt(duration_seconds, 10) || 0,
-      parseInt(order_index, 10) || 0,
-      status
-    );
+    let result;
+    try {
+      result = stmt.run(
+        Number(course_id),
+        title.trim(),
+        description ? description.trim() : '',
+        video_type,
+        resolvedProvider,
+        resolvedPrivacyType,
+        cleanVideoId,
+        manifest_url ? manifest_url.trim() : null,
+        license_server_url ? license_server_url.trim() : null,
+        parseInt(duration_seconds, 10) || 0,
+        parsedOrder,
+        status
+      );
+    } catch (err) {
+      if (err.message && err.message.includes('UNIQUE constraint failed')) {
+        return res.status(409).json({
+          success: false,
+          error: `Order #${parsedOrder} already exists for this course. Please choose another order number.`,
+          message: `Order #${parsedOrder} already exists for this course. Please choose another order number.`
+        });
+      }
+      throw err;
+    }
 
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(result.lastInsertRowid);
 
@@ -527,13 +561,38 @@ function updateVideoSqlite(req, res, next) {
       manifest_url,
       license_server_url,
       duration_seconds = 0,
-      order_index = 0,
+      order_index,
       status = 'ACTIVE'
     } = req.body;
 
     const existing = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Video not found.' });
+    }
+
+    const targetCourseId = course_id ? Number(course_id) : existing.course_id;
+    let targetOrder = existing.order_index;
+
+    if (req.body.order_index !== undefined && req.body.order_index !== null && String(req.body.order_index).trim() !== '') {
+      const parsedOrder = Number(req.body.order_index);
+      if (!Number.isInteger(parsedOrder) || parsedOrder <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Order index must be a positive integer greater than 0.'
+        });
+      }
+      targetOrder = parsedOrder;
+    }
+
+    if (targetOrder !== existing.order_index || targetCourseId !== existing.course_id) {
+      const conflict = db.prepare('SELECT id FROM videos WHERE course_id = ? AND order_index = ? AND id != ?').get(targetCourseId, targetOrder, videoId);
+      if (conflict) {
+        return res.status(409).json({
+          success: false,
+          error: `Order #${targetOrder} already exists for this course. Please choose another order number.`,
+          message: `Order #${targetOrder} already exists for this course. Please choose another order number.`
+        });
+      }
     }
 
     const targetVideoType = video_type || existing.video_type || 'youtube';
@@ -587,21 +646,32 @@ function updateVideoSqlite(req, res, next) {
       WHERE id = ?
     `);
 
-    stmt.run(
-      title ? title.trim() : existing.title,
-      description !== undefined ? description.trim() : existing.description,
-      course_id ? Number(course_id) : existing.course_id,
-      targetVideoType,
-      resolvedProvider,
-      resolvedPrivacyType,
-      cleanVideoId,
-      manifest_url !== undefined ? (manifest_url ? manifest_url.trim() : null) : existing.manifest_url,
-      license_server_url !== undefined ? (license_server_url ? license_server_url.trim() : null) : existing.license_server_url,
-      duration_seconds !== undefined ? parseInt(duration_seconds, 10) : existing.duration_seconds,
-      order_index !== undefined ? parseInt(order_index, 10) : existing.order_index,
-      status || existing.status,
-      videoId
-    );
+    try {
+      stmt.run(
+        title ? title.trim() : existing.title,
+        description !== undefined ? description.trim() : existing.description,
+        targetCourseId,
+        targetVideoType,
+        resolvedProvider,
+        resolvedPrivacyType,
+        cleanVideoId,
+        manifest_url !== undefined ? (manifest_url ? manifest_url.trim() : null) : existing.manifest_url,
+        license_server_url !== undefined ? (license_server_url ? license_server_url.trim() : null) : existing.license_server_url,
+        duration_seconds !== undefined ? parseInt(duration_seconds, 10) : existing.duration_seconds,
+        targetOrder,
+        status || existing.status,
+        videoId
+      );
+    } catch (err) {
+      if (err.message && err.message.includes('UNIQUE constraint failed')) {
+        return res.status(409).json({
+          success: false,
+          error: `Order #${targetOrder} already exists for this course. Please choose another order number.`,
+          message: `Order #${targetOrder} already exists for this course. Please choose another order number.`
+        });
+      }
+      throw err;
+    }
 
     const updated = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId);
 
@@ -1681,6 +1751,35 @@ async function createVideoSupabase(req, res, next) {
       }
     }
 
+    // Validate order_index: must be a positive integer greater than 0
+    if (order_index === undefined || order_index === null || String(order_index).trim() === '') {
+      return res.status(400).json({ success: false, error: 'Order index is required.' });
+    }
+    const parsedOrder = Number(order_index);
+    if (!Number.isInteger(parsedOrder) || parsedOrder <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order index must be a positive integer greater than 0.'
+      });
+    }
+
+    // Check whether order already exists for this course
+    const { data: existingOrder, error: checkErr } = await supabase
+      .from('videos')
+      .select('id')
+      .eq('course_id', Number(course_id))
+      .eq('order_index', parsedOrder)
+      .maybeSingle();
+
+    if (checkErr) throw checkErr;
+    if (existingOrder) {
+      return res.status(409).json({
+        success: false,
+        error: `Order #${parsedOrder} already exists for this course. Please choose another order number.`,
+        message: `Order #${parsedOrder} already exists for this course. Please choose another order number.`
+      });
+    }
+
     const { data: video, error } = await supabase
       .from('videos')
       .insert({
@@ -1694,13 +1793,22 @@ async function createVideoSupabase(req, res, next) {
         manifest_url: manifest_url ? manifest_url.trim() : null,
         license_server_url: license_server_url ? license_server_url.trim() : null,
         duration_seconds: parseInt(duration_seconds, 10) || 0,
-        order_index: parseInt(order_index, 10) || 0,
+        order_index: parsedOrder,
         status
       })
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({
+          success: false,
+          error: `Order #${parsedOrder} already exists for this course. Please choose another order number.`,
+          message: `Order #${parsedOrder} already exists for this course. Please choose another order number.`
+        });
+      }
+      throw error;
+    }
 
     let warning = null;
     if (video_type === 'youtube' && privacy_type === 'youtube_private') {
@@ -1731,9 +1839,9 @@ async function updateVideoSupabase(req, res, next) {
       youtube_video_id,
       manifest_url,
       license_server_url,
-      duration_seconds = 0,
-      order_index = 0,
-      status = 'ACTIVE'
+      duration_seconds,
+      order_index,
+      status
     } = req.body;
 
     const { data: existing, error: existErr } = await supabase
@@ -1745,6 +1853,39 @@ async function updateVideoSupabase(req, res, next) {
     if (existErr) throw existErr;
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Video not found.' });
+    }
+
+    const targetCourseId = course_id ? Number(course_id) : existing.course_id;
+    let targetOrder = existing.order_index;
+
+    if (order_index !== undefined && order_index !== null && String(order_index).trim() !== '') {
+      const parsedOrder = Number(order_index);
+      if (!Number.isInteger(parsedOrder) || parsedOrder <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Order index must be a positive integer greater than 0.'
+        });
+      }
+      targetOrder = parsedOrder;
+    }
+
+    if (targetOrder !== existing.order_index || targetCourseId !== existing.course_id) {
+      const { data: conflict, error: conflictErr } = await supabase
+        .from('videos')
+        .select('id')
+        .eq('course_id', targetCourseId)
+        .eq('order_index', targetOrder)
+        .neq('id', videoId)
+        .maybeSingle();
+
+      if (conflictErr) throw conflictErr;
+      if (conflict) {
+        return res.status(409).json({
+          success: false,
+          error: `Order #${targetOrder} already exists for this course. Please choose another order number.`,
+          message: `Order #${targetOrder} already exists for this course. Please choose another order number.`
+        });
+      }
     }
 
     const targetVideoType = video_type || existing.video_type || 'youtube';
@@ -1785,7 +1926,7 @@ async function updateVideoSupabase(req, res, next) {
       .update({
         title: title ? title.trim() : existing.title,
         description: description !== undefined ? description.trim() : existing.description,
-        course_id: course_id ? Number(course_id) : existing.course_id,
+        course_id: targetCourseId,
         video_type: targetVideoType,
         provider: resolvedProvider,
         privacy_type: resolvedPrivacyType,
@@ -1793,7 +1934,7 @@ async function updateVideoSupabase(req, res, next) {
         manifest_url: manifest_url !== undefined ? (manifest_url ? manifest_url.trim() : null) : existing.manifest_url,
         license_server_url: license_server_url !== undefined ? (license_server_url ? license_server_url.trim() : null) : existing.license_server_url,
         duration_seconds: duration_seconds !== undefined ? parseInt(duration_seconds, 10) : existing.duration_seconds,
-        order_index: order_index !== undefined ? parseInt(order_index, 10) : existing.order_index,
+        order_index: targetOrder,
         status: status || existing.status,
         updated_at: new Date().toISOString()
       })
@@ -1801,7 +1942,16 @@ async function updateVideoSupabase(req, res, next) {
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({
+          success: false,
+          error: `Order #${targetOrder} already exists for this course. Please choose another order number.`,
+          message: `Order #${targetOrder} already exists for this course. Please choose another order number.`
+        });
+      }
+      throw error;
+    }
 
     const warning = updated.privacy_type === 'youtube_private'
       ? 'Private YouTube videos require YouTube viewer authorization. For reliable student-specific access control, use YouTube Unlisted for the MVP or Widevine DRM.'

@@ -164,6 +164,7 @@ export function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_enrollments_student_course ON enrollments(student_id, course_id);
     CREATE INDEX IF NOT EXISTS idx_videos_course ON videos(course_id, order_index);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_course_order_unique ON videos(course_id, order_index);
     CREATE INDEX IF NOT EXISTS idx_progress_student_video ON video_progress(student_id, video_id);
     CREATE INDEX IF NOT EXISTS idx_documents_course ON course_documents(course_id, order_index);
     CREATE INDEX IF NOT EXISTS idx_notes_student ON student_notes(student_id);
