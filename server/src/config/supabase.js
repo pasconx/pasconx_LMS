@@ -6,6 +6,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Polyfill global WebSocket if missing in Node 20 for Supabase realtime initialization
+if (typeof globalThis.WebSocket === 'undefined') {
+  globalThis.WebSocket = class DummyWebSocket {};
+}
+
 // Ensure environment variables are loaded if imported before app.js
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -53,6 +58,7 @@ export const supabase = isSupabaseConfigured
         persistSession: false,
         autoRefreshToken: false,
       },
+      realtime: { disabled: true }
     })
   : null;
 
@@ -66,6 +72,7 @@ export const supabaseAuth = isSupabaseConfigured
         persistSession: false,
         autoRefreshToken: false,
       },
+      realtime: { disabled: true }
     })
   : null;
 
@@ -80,7 +87,8 @@ export function getScopedSupabaseClient(req) {
   if (token && isSupabaseConfigured) {
     return createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false }
+      auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { disabled: true }
     });
   }
   return supabase;
