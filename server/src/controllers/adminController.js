@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../config/database.js';
 import { supabase, getScopedSupabaseClient } from '../config/supabase.js';
 import { getVideoProvider } from '../providers/index.js';
+import { forceReleaseSession, SESSION_STALE_MS } from '../utils/sessionLock.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
 import { invalidateUserSessions } from '../middleware/auth.js';
 
@@ -62,12 +63,21 @@ function getStudentsSqlite(req, res, next) {
         u.email,
         u.status,
         u.created_at,
+        u.session_last_seen,
+        (u.active_session_id IS NOT NULL) AS has_session,
         (SELECT COUNT(*) FROM enrollments e WHERE e.student_id = u.id AND e.status = 'ACTIVE') AS active_courses_count,
         (SELECT COUNT(*) FROM enrollments e WHERE e.student_id = u.id) AS total_courses_count
       FROM users u
       WHERE u.role = 'STUDENT'
       ORDER BY u.created_at DESC
-    `).all();
+    `).all().map((st) => {
+      const last = st.session_last_seen ? new Date(st.session_last_seen).getTime() : 0;
+      return {
+        ...st,
+        has_session: undefined,
+        is_online: !!st.has_session && (Date.now() - last) < SESSION_STALE_MS
+      };
+    });
 
     return res.json({
       success: true,
@@ -405,7 +415,7 @@ function getVideosSqlite(req, res, next) {
 
 function createVideoSqlite(req, res, next) {
   try {
-    const {
+    let {
       title,
       description,
       course_id,
@@ -437,7 +447,17 @@ function createVideoSqlite(req, res, next) {
     let resolvedProvider = provider;
     let resolvedPrivacyType = privacy_type;
 
-    if (video_type === 'widevine') {
+    if (video_type === 'link') {
+      const linkProvider = getVideoProvider('link');
+      const parsedLink = linkProvider.parseInput(manifest_url || req.body.video_url || youtube_video_id);
+      if (!parsedLink.ok) {
+        return res.status(400).json({ success: false, error: parsedLink.error });
+      }
+      manifest_url = parsedLink.url;
+      resolvedProvider = 'link';
+      resolvedPrivacyType = 'link_url';
+      cleanVideoId = `lnk-${Date.now()}`;
+    } else if (video_type === 'widevine') {
       resolvedProvider = 'widevine';
       resolvedPrivacyType = 'widevine_drm';
 
@@ -538,7 +558,7 @@ function createVideoSqlite(req, res, next) {
 
     return res.status(201).json({
       success: true,
-      message: `${video_type === 'widevine' ? 'Widevine DRM protected video' : 'YouTube video'} added successfully.`,
+      message: `${video_type === 'widevine' ? 'Widevine DRM protected video' : (video_type === 'link' ? 'Video link' : 'YouTube video')} added successfully.`,
       warning,
       video
     });
@@ -550,7 +570,7 @@ function createVideoSqlite(req, res, next) {
 function updateVideoSqlite(req, res, next) {
   try {
     const videoId = Number(req.params.id);
-    const {
+    let {
       title,
       description,
       course_id,
@@ -600,7 +620,18 @@ function updateVideoSqlite(req, res, next) {
     let resolvedProvider = provider || existing.provider;
     let resolvedPrivacyType = privacy_type || existing.privacy_type;
 
-    if (targetVideoType === 'widevine') {
+    if (targetVideoType === 'link') {
+      const linkProvider = getVideoProvider('link');
+      const incoming = manifest_url !== undefined ? manifest_url : existing.manifest_url;
+      const parsedLink = linkProvider.parseInput(incoming);
+      if (!parsedLink.ok) {
+        return res.status(400).json({ success: false, error: parsedLink.error });
+      }
+      manifest_url = parsedLink.url;
+      resolvedProvider = 'link';
+      resolvedPrivacyType = 'link_url';
+      if (!cleanVideoId) cleanVideoId = `lnk-${Date.now()}`;
+    } else if (targetVideoType === 'widevine') {
       resolvedProvider = 'widevine';
       resolvedPrivacyType = 'widevine_drm';
 
@@ -1116,16 +1147,25 @@ async function getAdminStatsSupabase(req, res, next) {
 
 async function getStudentsSupabase(req, res, next) {
   try {
-    const [studentsRes, enrollmentsRes] = await Promise.all([
+    let [studentsRes, enrollmentsRes] = await Promise.all([
       supabase
         .from('profiles')
-        .select('id, name, email, status, created_at')
+        .select('id, name, email, status, created_at, active_session_id, session_last_seen')
         .eq('role', 'STUDENT')
         .order('created_at', { ascending: false }),
       supabase
         .from('enrollments')
         .select('student_id, status')
     ]);
+
+    // Migration 002 not applied yet? Fall back so the Students page never breaks.
+    if (studentsRes.error && /active_session_id|session_last_seen/.test(studentsRes.error.message || '')) {
+      studentsRes = await supabase
+        .from('profiles')
+        .select('id, name, email, status, created_at')
+        .eq('role', 'STUDENT')
+        .order('created_at', { ascending: false });
+    }
 
     if (studentsRes.error) throw studentsRes.error;
     if (enrollmentsRes.error) throw enrollmentsRes.error;
@@ -1147,6 +1187,10 @@ async function getStudentsSupabase(req, res, next) {
       email: s.email,
       status: s.status,
       created_at: s.created_at,
+      session_last_seen: s.session_last_seen || null,
+      is_online: !!s.active_session_id && s.session_last_seen
+        ? (Date.now() - new Date(s.session_last_seen).getTime()) < SESSION_STALE_MS
+        : false,
       active_courses_count: countMap[s.id]?.active || 0,
       total_courses_count: countMap[s.id]?.total || 0
     }));
@@ -1676,7 +1720,7 @@ async function getVideosSupabase(req, res, next) {
 
 async function createVideoSupabase(req, res, next) {
   try {
-    const {
+    let {
       title,
       description,
       course_id,
@@ -1714,7 +1758,17 @@ async function createVideoSupabase(req, res, next) {
     let resolvedProvider = provider;
     let resolvedPrivacyType = privacy_type;
 
-    if (video_type === 'widevine') {
+    if (video_type === 'link') {
+      const linkProvider = getVideoProvider('link');
+      const parsedLink = linkProvider.parseInput(manifest_url || req.body.video_url || youtube_video_id);
+      if (!parsedLink.ok) {
+        return res.status(400).json({ success: false, error: parsedLink.error });
+      }
+      manifest_url = parsedLink.url;
+      resolvedProvider = 'link';
+      resolvedPrivacyType = 'link_url';
+      cleanVideoId = `lnk-${Date.now()}`;
+    } else if (video_type === 'widevine') {
       resolvedProvider = 'widevine';
       resolvedPrivacyType = 'widevine_drm';
 
@@ -1817,7 +1871,7 @@ async function createVideoSupabase(req, res, next) {
 
     return res.status(201).json({
       success: true,
-      message: `${video_type === 'widevine' ? 'Widevine DRM protected video' : 'YouTube video'} added successfully.`,
+      message: `${video_type === 'widevine' ? 'Widevine DRM protected video' : (video_type === 'link' ? 'Video link' : 'YouTube video')} added successfully.`,
       warning,
       video
     });
@@ -1829,7 +1883,7 @@ async function createVideoSupabase(req, res, next) {
 async function updateVideoSupabase(req, res, next) {
   try {
     const videoId = Number(req.params.id);
-    const {
+    let {
       title,
       description,
       course_id,
@@ -1893,7 +1947,18 @@ async function updateVideoSupabase(req, res, next) {
     let resolvedProvider = provider || existing.provider;
     let resolvedPrivacyType = privacy_type || existing.privacy_type;
 
-    if (targetVideoType === 'widevine') {
+    if (targetVideoType === 'link') {
+      const linkProvider = getVideoProvider('link');
+      const incoming = manifest_url !== undefined ? manifest_url : existing.manifest_url;
+      const parsedLink = linkProvider.parseInput(incoming);
+      if (!parsedLink.ok) {
+        return res.status(400).json({ success: false, error: parsedLink.error });
+      }
+      manifest_url = parsedLink.url;
+      resolvedProvider = 'link';
+      resolvedPrivacyType = 'link_url';
+      if (!cleanVideoId) cleanVideoId = `lnk-${Date.now()}`;
+    } else if (targetVideoType === 'widevine') {
       resolvedProvider = 'widevine';
       resolvedPrivacyType = 'widevine_drm';
 
@@ -2580,4 +2645,33 @@ export function deleteAdminCourseDocument(req, res, next) {
     return deleteAdminCourseDocumentSupabase(req, res, next);
   }
   return deleteAdminCourseDocumentSqlite(req, res, next);
+}
+
+
+/**
+ * Admin: force-logout a student / release the single-session lock
+ * (use when a student lost the device or closed the browser and is blocked from logging in).
+ */
+export async function resetStudentSession(req, res, next) {
+  try {
+    const studentId = req.params.id;
+    if (!studentId) {
+      return res.status(400).json({ success: false, error: 'Student id is required.' });
+    }
+    await forceReleaseSession(process.env.DATA_BACKEND === 'supabase' ? studentId : Number(studentId));
+    logSecurityEvent({
+      userId: req.user.id,
+      eventType: 'ADMIN_RESET_STUDENT_SESSION',
+      resourceType: 'user',
+      resourceId: studentId,
+      req,
+      status: 'SUCCESS'
+    });
+    return res.json({
+      success: true,
+      message: 'Student session reset. They can log in again from any laptop.'
+    });
+  } catch (error) {
+    next(error);
+  }
 }

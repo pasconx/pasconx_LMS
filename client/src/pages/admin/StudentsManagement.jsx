@@ -14,7 +14,8 @@ import {
   Search, 
   CheckCircle, 
   AlertCircle,
-  ShieldAlert
+  ShieldAlert,
+  LogOut
 } from 'lucide-react';
 
 export default function StudentsManagement() {
@@ -104,6 +105,19 @@ export default function StudentsManagement() {
       }
     } catch (err) {
       notify('error', err.message || 'Status update failed.');
+    }
+  };
+
+  const handleResetSession = async (student) => {
+    if (!window.confirm(`Force logout "${student.name}" and release their login lock?\nThey will be able to log in again from one laptop.`)) return;
+    try {
+      const res = await api.post(`/admin/students/${student.id}/reset-session`);
+      if (res.success) {
+        notify('success', res.message || 'Student session reset.');
+        fetchStudents();
+      }
+    } catch (err) {
+      notify('error', err.message || 'Session reset failed.');
     }
   };
 
@@ -217,7 +231,14 @@ export default function StudentsManagement() {
                     <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{s.name}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{s.email}</td>
                     <td className="py-3.5 px-4">
-                      <StatusBadge status={s.status} />
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge status={s.status} />
+                        {s.is_online ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Logged in now
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{s.active_courses_count}</span>
@@ -261,6 +282,14 @@ export default function StudentsManagement() {
                         title="Reset Password"
                       >
                         <Key className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => handleResetSession(s)}
+                        className="p-1.5 rounded-lg border border-amber-200 dark:border-amber-900/60 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"
+                        title="Force logout / release login lock"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
                       </button>
 
                       <Link

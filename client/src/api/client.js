@@ -14,7 +14,13 @@ api.interceptors.response.use(
   (error) => {
     const message = error.response?.data?.error || error.message || 'An unexpected error occurred.';
     const status = error.response?.status;
-    return Promise.reject({ message, status, data: error.response?.data });
+    const code = error.response?.data?.code;
+
+    // Session was replaced / reset by admin / expired -> tell AuthContext to log this browser out
+    if (status === 401 && code === 'SESSION_INVALID') {
+      window.dispatchEvent(new CustomEvent('pasconx:session-ended', { detail: { message } }));
+    }
+    return Promise.reject({ message, status, code, data: error.response?.data });
   }
 );
 

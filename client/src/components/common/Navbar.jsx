@@ -66,6 +66,7 @@ export default function Navbar() {
   const studentLinks = [
     { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
     { label: 'My Courses', path: '/student/courses', icon: BookOpen },
+    { label: 'Recorded Videos', path: '/student/recordings', icon: Video },
     { label: 'Calendar', path: '/student/calendar', icon: Calendar },
     { label: 'My Notes', path: '/student/notes', icon: FileText },
     { label: 'Profile', path: '/student/profile', icon: User }

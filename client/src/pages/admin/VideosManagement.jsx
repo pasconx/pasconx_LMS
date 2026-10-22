@@ -275,7 +275,11 @@ export default function VideosManagement() {
                     <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300">{v.course_title}</td>
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-1">
-                        {v.video_type === 'widevine' ? (
+                        {v.video_type === 'link' ? (
+                          <span className="font-bold uppercase text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded w-fit border border-emerald-200 dark:border-emerald-800/60">
+                            Video Link
+                          </span>
+                        ) : v.video_type === 'widevine' ? (
                           <span className="font-bold uppercase text-[10px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded w-fit border border-purple-200 dark:border-purple-800/60">
                             Widevine DRM
                           </span>
@@ -285,12 +289,16 @@ export default function VideosManagement() {
                           </span>
                         )}
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {v.video_type === 'widevine' ? 'Encrypted DASH (.mpd)' : (v.privacy_type === 'youtube_private' ? 'Private' : 'Unlisted')}
+                          {v.video_type === 'link' ? 'External link' : v.video_type === 'widevine' ? 'Encrypted DASH (.mpd)' : (v.privacy_type === 'youtube_private' ? 'Private' : 'Unlisted')}
                         </span>
                       </div>
                     </td>
                     <td className="py-3.5 px-4 font-mono font-semibold text-slate-800 dark:text-slate-200 text-xs">
-                      {v.video_type === 'widevine' ? (
+                      {v.video_type === 'link' ? (
+                        <div className="truncate max-w-[160px]" title={v.manifest_url}>
+                          {(() => { try { return new URL(v.manifest_url).hostname; } catch { return v.manifest_url; } })()}
+                        </div>
+                      ) : v.video_type === 'widevine' ? (
                         <div className="truncate max-w-[140px]" title={v.manifest_url || v.external_video_id}>
                           {v.external_video_id || 'DASH Stream'}
                         </div>
@@ -315,7 +323,7 @@ export default function VideosManagement() {
                             video_type: v.video_type || 'youtube',
                             provider: v.provider,
                             privacy_type: v.privacy_type,
-                            youtube_video_id: v.video_type === 'widevine' ? '' : v.external_video_id,
+                            youtube_video_id: (v.video_type === 'widevine' || v.video_type === 'link') ? '' : v.external_video_id,
                             manifest_url: v.manifest_url || '',
                             license_server_url: v.license_server_url || '',
                             external_video_id: v.external_video_id || '',
@@ -398,7 +406,7 @@ export default function VideosManagement() {
           {/* Video Type Selector */}
           <div>
             <label className="block text-xs font-bold uppercase text-slate-700 mb-2">Video Delivery & Protection Type</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, video_type: 'youtube', provider: 'youtube' })}
@@ -438,11 +446,54 @@ export default function VideosManagement() {
                   <div className="text-[11px] text-slate-500">Encrypted DASH stream + EME Shaka Player</div>
                 </div>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, video_type: 'link', provider: 'link', privacy_type: 'link_url' })}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                  formData.video_type === 'link'
+                    ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-600/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                  formData.video_type === 'link' ? 'border-emerald-600' : 'border-slate-300'
+                }`}>
+                  {formData.video_type === 'link' && <div className="w-2 h-2 rounded-full bg-emerald-600" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Any Video Link</div>
+                  <div className="text-[11px] text-slate-500">Drive, Vimeo, MP4, m3u8, Loom, embed code...</div>
+                </div>
+              </button>
+
             </div>
           </div>
 
           {/* Conditional Fields: YouTube vs Widevine DRM */}
-          {formData.video_type === 'youtube' ? (
+          {formData.video_type === 'link' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                  Video Link / URL / Embed Code
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={formData.manifest_url}
+                  onChange={(e) => setFormData({ ...formData, manifest_url: e.target.value })}
+                  placeholder="Paste any https:// video link (YouTube, Google Drive, Vimeo, Loom, .mp4, .m3u8...) or an <iframe ...> embed code"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Auto-detected: YouTube, Google Drive, Vimeo, Loom, direct .mp4/.webm and .m3u8 streams. Any other https link is shown in an embedded frame.
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 leading-relaxed">
+                <strong>Tip:</strong> Google Drive &rarr; set sharing to &ldquo;Anyone with the link&rdquo;. YouTube &rarr; use <em>Unlisted</em>. The portal adds a student watermark on top of every video.
+              </div>
+            </div>
+          ) : formData.video_type === 'youtube' ? (
             <>
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Privacy Mode</label>
@@ -645,7 +696,7 @@ export default function VideosManagement() {
           {/* Video Type Selector */}
           <div>
             <label className="block text-xs font-bold uppercase text-slate-700 mb-2">Video Delivery & Protection Type</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, video_type: 'youtube', provider: 'youtube' })}
@@ -685,11 +736,39 @@ export default function VideosManagement() {
                   <div className="text-[11px] text-slate-500">Encrypted DASH stream + EME Shaka Player</div>
                 </div>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, video_type: 'link', provider: 'link', privacy_type: 'link_url' })}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                  formData.video_type === 'link'
+                    ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-600/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 ${
+                  formData.video_type === 'link' ? 'border-emerald-600' : 'border-slate-300'
+                }`}>
+                  {formData.video_type === 'link' && <div className="w-2 h-2 rounded-full bg-emerald-600" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Any Video Link</div>
+                  <div className="text-[11px] text-slate-500">Drive, Vimeo, MP4, m3u8, Loom, embed code...</div>
+                </div>
+              </button>
+
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {formData.video_type === 'youtube' ? (
+            {formData.video_type === 'link' ? (
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Delivery</label>
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-800">
+                  External Video Link
+                </div>
+              </div>
+            ) : formData.video_type === 'youtube' ? (
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Privacy Mode</label>
                 <select
@@ -729,7 +808,29 @@ export default function VideosManagement() {
             </div>
           )}
 
-          {formData.video_type === 'youtube' ? (
+          {formData.video_type === 'link' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                  Video Link / URL / Embed Code
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={formData.manifest_url}
+                  onChange={(e) => setFormData({ ...formData, manifest_url: e.target.value })}
+                  placeholder="Paste any https:// video link (YouTube, Google Drive, Vimeo, Loom, .mp4, .m3u8...) or an <iframe ...> embed code"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Auto-detected: YouTube, Google Drive, Vimeo, Loom, direct .mp4/.webm and .m3u8 streams. Any other https link is shown in an embedded frame.
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 leading-relaxed">
+                <strong>Tip:</strong> Google Drive &rarr; set sharing to &ldquo;Anyone with the link&rdquo;. YouTube &rarr; use <em>Unlisted</em>. The portal adds a student watermark on top of every video.
+              </div>
+            </div>
+          ) : formData.video_type === 'youtube' ? (
             <div>
               <label className="block text-xs font-bold uppercase text-slate-700 mb-1">YouTube Video ID</label>
               <input

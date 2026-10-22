@@ -4,6 +4,7 @@ import { db } from '../config/database.js';
 import { supabase, supabaseAuth } from '../config/supabase.js';
 import { JWT_SECRET, invalidateSessionCache, invalidateUserSessions } from '../middleware/auth.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
+import { gateLogin, releaseSessionBySid, getSessionIdFromReq, SESSION_COOKIE } from '../utils/sessionLock.js';
 
 export const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -75,6 +76,10 @@ async function loginSqlite(req, res, next) {
       });
     }
 
+    // Desktop-only + single active session (students). Sends its own error response if blocked.
+    const gate = await gateLogin(req, res, user, COOKIE_OPTIONS);
+    if (!gate) return;
+
     const token = jwt.sign(
       { id: user.id, role: user.role },
       JWT_SECRET,
@@ -104,7 +109,8 @@ async function loginSqlite(req, res, next) {
       success: true,
       message: 'Login successful.',
       user: safeUser,
-      token
+      token,
+      sessionId: gate.sid || undefined
     });
   } catch (error) {
     next(error);
@@ -219,6 +225,10 @@ async function loginSupabase(req, res, next) {
       });
     }
 
+    // Desktop-only + single active session (students). Sends its own error response if blocked.
+    const gate = await gateLogin(req, res, profile, COOKIE_OPTIONS);
+    if (!gate) return;
+
     const token = data.session?.access_token;
     if (!token) {
       return res.status(401).json({
@@ -249,7 +259,8 @@ async function loginSupabase(req, res, next) {
       success: true,
       message: 'Login successful.',
       user: safeUser,
-      token
+      token,
+      sessionId: gate.sid || undefined
     });
   } catch (error) {
     next(error);
@@ -266,11 +277,19 @@ export async function login(req, res, next) {
   return loginSqlite(req, res, next);
 }
 
-export function logout(req, res) {
+export async function logout(req, res) {
   const token = req.cookies?.pasconix_token || req.headers?.authorization?.replace('Bearer ', '');
   if (token) {
     invalidateSessionCache(token);
   }
+
+  // Free the single-session lock so the student can log in again on any device
+  await releaseSessionBySid(getSessionIdFromReq(req));
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  });
 
   if (req.user?.id) {
     logSecurityEvent({
@@ -552,3 +571,12 @@ export async function changePassword(req, res, next) {
   }
 }
 
+
+
+/**
+ * Lightweight keep-alive. authenticateUser already validated the session and
+ * refreshed session_last_seen, so nothing else to do.
+ */
+export function heartbeat(req, res) {
+  return res.json({ success: true, ts: Date.now() });
+}

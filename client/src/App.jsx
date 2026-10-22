@@ -6,11 +6,13 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import Navbar from './components/common/Navbar.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
+import DesktopOnlyGuard from './components/common/DesktopOnlyGuard.jsx';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage.jsx';
 import StudentDashboard from './pages/student/StudentDashboard.jsx';
 import MyCoursesPage from './pages/student/MyCoursesPage.jsx';
+import RecordingsPage from './pages/student/RecordingsPage.jsx';
 import CourseDetailPage from './pages/student/CourseDetailPage.jsx';
 import VideoWatchPage from './pages/student/VideoWatchPage.jsx';
 import StudentProfile from './pages/student/StudentProfile.jsx';
@@ -54,6 +56,7 @@ function RootRedirect() {
 export default function App() {
   return (
     <ErrorBoundary>
+      <DesktopOnlyGuard>
       <ThemeProvider>
         <AuthProvider>
           <BrowserRouter>
@@ -76,6 +79,7 @@ export default function App() {
             >
               <Route path="/student/dashboard" element={<StudentDashboard />} />
               <Route path="/student/courses" element={<MyCoursesPage />} />
+              <Route path="/student/recordings" element={<RecordingsPage />} />
               <Route path="/student/courses/:courseId" element={<CourseDetailPage />} />
               <Route path="/student/watch/:videoId" element={<VideoWatchPage />} />
               <Route path="/student/calendar" element={<StudentCalendarPage />} />
@@ -107,6 +111,7 @@ export default function App() {
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
+      </DesktopOnlyGuard>
   </ErrorBoundary>
   );
 }

@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { db } from '../config/database.js';
 import { supabase } from '../config/supabase.js';
+import { enforceSessionOnRequest } from '../utils/sessionLock.js';
 
 export const JWT_SECRET = process.env.SESSION_SECRET || 'pasconix_default_jwt_secret_dev';
 
@@ -30,7 +31,12 @@ function authenticateSqliteUser(req, res, next, token) {
     }
 
     req.user = user;
-    next();
+    return enforceSessionOnRequest(req, res).then((ok) => {
+      if (ok) next();
+    }).catch((err) => {
+      console.error('Session validation error:', err?.message || err);
+      return res.status(500).json({ success: false, error: 'Session validation failed.' });
+    });
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
@@ -124,6 +130,8 @@ async function authenticateSupabaseUser(req, res, next, token) {
     const cached = supabaseSessionCache.get(tokenKey);
     if (cached && now < cached.expiresAt) {
       req.user = cached.user;
+      // single-session lock is re-checked on EVERY request (never cached)
+      if (!(await enforceSessionOnRequest(req, res))) return;
       return next();
     }
 
@@ -194,6 +202,7 @@ async function authenticateSupabaseUser(req, res, next, token) {
       expiresAt: expiresAt
     });
 
+    if (!(await enforceSessionOnRequest(req, res))) return;
     next();
   } catch (error) {
     supabaseSessionCache.delete(tokenKey);

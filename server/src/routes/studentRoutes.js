@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getStudentCourses,
+  getStudentRecordings,
   getStudentCourseDetail,
   getStudentVideoPlayback,
   updateStudentVideoProgress,
@@ -27,6 +28,9 @@ const router = Router();
 // All student routes require valid user session and STUDENT role
 router.use(authenticateUser);
 router.use(requireStudent);
+
+// All recorded videos across the student's active courses (one place)
+router.get('/recordings', getStudentRecordings);
 
 // Student courses list (only courses assigned to this student)
 router.get('/courses', getStudentCourses);

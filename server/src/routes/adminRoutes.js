@@ -6,6 +6,7 @@ import {
   updateStudent,
   updateStudentStatus,
   resetStudentPassword,
+  resetStudentSession,
   getCourses,
   createCourse,
   updateCourse,
@@ -50,6 +51,7 @@ router.post('/students', createStudent);
 router.put('/students/:id', updateStudent);
 router.patch('/students/:id/status', updateStudentStatus);
 router.post('/students/:id/reset-password', resetStudentPassword);
+router.post('/students/:id/reset-session', resetStudentSession);
 
 // Course Management
 router.get('/courses', getCourses);

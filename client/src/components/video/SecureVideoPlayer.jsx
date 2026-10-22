@@ -1,6 +1,7 @@
 import React from 'react';
 import YouTubePlayer from './YouTubePlayer.jsx';
 import WidevinePlayer from './WidevinePlayer.jsx';
+import LinkPlayer from './LinkPlayer.jsx';
 import ScreenCaptureGuard from './ScreenCaptureGuard.jsx';
 
 /**
@@ -19,10 +20,20 @@ export default function SecureVideoPlayer({
   playerControlRef
 }) {
   const isWidevine = video?.video_type === 'widevine' || playback?.provider === 'widevine';
+  const isLink = video?.video_type === 'link' || playback?.provider === 'link';
 
   return (
     <ScreenCaptureGuard>
-      {isWidevine ? (
+      {isLink ? (
+        <LinkPlayer
+          playback={playback}
+          initialProgressSeconds={progress?.progress_seconds || 0}
+          onProgressUpdate={onProgressUpdate}
+          student={student}
+          watermarkProfile={watermarkProfile}
+          playerControlRef={playerControlRef}
+        />
+      ) : isWidevine ? (
         <WidevinePlayer
           manifestUrl={playback?.manifestUrl || video?.manifest_url}
           licenseServerUrl={playback?.licenseServerUrl}

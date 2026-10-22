@@ -807,3 +807,105 @@ export function streamStudentDocument(req, res, next) {
     next(error);
   }
 }
+
+
+/**
+ * ==========================================
+ * RECORDED VIDEOS (all recordings in one place)
+ * Every ACTIVE video from every course the student is actively enrolled in,
+ * newest first, with the student's own progress.
+ * ==========================================
+ */
+function getStudentRecordingsSqlite(req, res, next) {
+  try {
+    const studentId = req.user.id;
+    const now = new Date().toISOString();
+    const recordings = db.prepare(`
+      SELECT
+        v.id, v.title, v.description, v.video_type, v.duration_seconds, v.order_index, v.created_at,
+        c.id AS course_id, c.title AS course_title,
+        COALESCE(p.completed, 0) AS completed,
+        COALESCE(p.progress_seconds, 0) AS progress_seconds
+      FROM videos v
+      JOIN courses c ON c.id = v.course_id
+      JOIN enrollments e ON e.course_id = c.id AND e.student_id = ?
+      LEFT JOIN video_progress p ON p.video_id = v.id AND p.student_id = ?
+      WHERE v.status = 'ACTIVE'
+        AND c.status = 'ACTIVE'
+        AND e.status = 'ACTIVE'
+        AND e.access_start <= ?
+        AND e.access_expiry >= ?
+      ORDER BY v.created_at DESC, v.id DESC
+    `).all(studentId, studentId, now, now);
+
+    return res.json({ success: true, recordings });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getStudentRecordingsSupabase(req, res, next) {
+  try {
+    const studentId = req.user.id;
+    const now = new Date().toISOString();
+
+    const { data: enrollments, error: enrollErr } = await supabase
+      .from('enrollments')
+      .select('course_id')
+      .eq('student_id', studentId)
+      .eq('status', 'ACTIVE')
+      .lte('access_start', now)
+      .gte('access_expiry', now);
+    if (enrollErr) throw enrollErr;
+
+    const courseIds = (enrollments || []).map(e => e.course_id);
+    if (courseIds.length === 0) {
+      return res.json({ success: true, recordings: [] });
+    }
+
+    const [videosRes, progressRes] = await Promise.all([
+      supabase
+        .from('videos')
+        .select('id, title, description, video_type, duration_seconds, order_index, created_at, course_id, courses!inner(title, status)')
+        .eq('status', 'ACTIVE')
+        .eq('courses.status', 'ACTIVE')
+        .in('course_id', courseIds)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false }),
+      supabase
+        .from('video_progress')
+        .select('video_id, progress_seconds, completed')
+        .eq('student_id', studentId)
+    ]);
+    if (videosRes.error) throw videosRes.error;
+    if (progressRes.error) throw progressRes.error;
+
+    const progressMap = {};
+    (progressRes.data || []).forEach(p => { progressMap[p.video_id] = p; });
+
+    const recordings = (videosRes.data || []).map(v => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      video_type: v.video_type,
+      duration_seconds: v.duration_seconds,
+      order_index: v.order_index,
+      created_at: v.created_at,
+      course_id: v.course_id,
+      course_title: v.courses?.title || '',
+      completed: progressMap[v.id]?.completed ? 1 : 0,
+      progress_seconds: progressMap[v.id]?.progress_seconds || 0
+    }));
+
+    return res.json({ success: true, recordings });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export function getStudentRecordings(req, res, next) {
+  if (process.env.DATA_BACKEND === 'supabase') {
+    return getStudentRecordingsSupabase(req, res, next);
+  }
+  return getStudentRecordingsSqlite(req, res, next);
+}

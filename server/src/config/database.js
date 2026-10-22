@@ -52,6 +52,9 @@ export function initDatabase() {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('STUDENT', 'ADMIN')),
       status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'DISABLED')),
+      active_session_id TEXT,
+      session_last_seen TEXT,
+      session_device TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -71,9 +74,9 @@ export function initDatabase() {
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT,
-      video_type TEXT NOT NULL DEFAULT 'youtube' CHECK(video_type IN ('youtube', 'widevine')),
+      video_type TEXT NOT NULL DEFAULT 'youtube' CHECK(video_type IN ('youtube', 'widevine', 'link')),
       provider TEXT NOT NULL DEFAULT 'youtube',
-      privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK(privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm')),
+      privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK(privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm', 'link_url')),
       external_video_id TEXT NOT NULL,
       manifest_url TEXT,
       license_server_url TEXT,
@@ -194,6 +197,62 @@ export function initDatabase() {
     }
   } catch (migrationErr) {
     console.warn('Database migration notice for videos table:', migrationErr.message);
+  }
+
+  // Safe migration: single-session lock columns on users
+  try {
+    const userCols = new Set(db.prepare("PRAGMA table_info(users)").all().map(c => c.name));
+    if (!userCols.has('active_session_id')) db.exec("ALTER TABLE users ADD COLUMN active_session_id TEXT");
+    if (!userCols.has('session_last_seen')) db.exec("ALTER TABLE users ADD COLUMN session_last_seen TEXT");
+    if (!userCols.has('session_device')) db.exec("ALTER TABLE users ADD COLUMN session_device TEXT");
+  } catch (migrationErr) {
+    console.warn('Database migration notice for users session columns:', migrationErr.message);
+  }
+
+  // Safe migration: allow video_type='link' / privacy_type='link_url' (SQLite cannot alter CHECK -> rebuild table once)
+  try {
+    const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='videos'").get();
+    if (row && row.sql && !row.sql.includes("'link'")) {
+      const oldCols = db.prepare("PRAGMA table_info(videos)").all().map(c => c.name);
+      const newDef = `
+        CREATE TABLE videos_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          description TEXT,
+          video_type TEXT NOT NULL DEFAULT 'youtube' CHECK(video_type IN ('youtube', 'widevine', 'link')),
+          provider TEXT NOT NULL DEFAULT 'youtube',
+          privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK(privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm', 'link_url')),
+          external_video_id TEXT NOT NULL,
+          manifest_url TEXT,
+          license_server_url TEXT,
+          duration_seconds INTEGER DEFAULT 0,
+          order_index INTEGER DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`;
+      const newCols = ['id','course_id','title','description','video_type','provider','privacy_type','external_video_id','manifest_url','license_server_url','duration_seconds','order_index','status','created_at','updated_at'];
+      const copyCols = newCols.filter(c => oldCols.includes(c)).join(', ');
+      db.pragma('foreign_keys = OFF');
+      try {
+        db.exec('BEGIN');
+        db.exec(newDef);
+        db.exec(`INSERT INTO videos_new (${copyCols}) SELECT ${copyCols} FROM videos`);
+        db.exec('DROP TABLE videos');
+        db.exec('ALTER TABLE videos_new RENAME TO videos');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_videos_course ON videos(course_id, order_index)');
+        db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_course_order_unique ON videos(course_id, order_index)');
+        db.exec('COMMIT');
+      } catch (rebuildErr) {
+        try { db.exec('ROLLBACK'); } catch (_) {}
+        throw rebuildErr;
+      } finally {
+        db.pragma('foreign_keys = ON');
+      }
+    }
+  } catch (migrationErr) {
+    console.warn('Database migration notice for videos link type:', migrationErr.message);
   }
   } catch (err) {
     console.warn('Database init notice:', err.message);
