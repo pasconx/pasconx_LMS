@@ -180,9 +180,10 @@ async function loginSupabase(req, res, next) {
         details: errMsg === 'Invalid login credentials' ? 'Invalid email or password' : errMsg
       });
 
+      console.error('[LOGIN DEBUG] signInWithPassword failed:', error.status, errMsg);
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password.'
+        error: `Invalid email or password. [debug: ${error.status || ''} ${errMsg}]`
       });
     }
 
@@ -203,9 +204,10 @@ async function loginSupabase(req, res, next) {
         status: 'DENIED',
         details: 'User profile not found'
       });
+      console.error('[LOGIN DEBUG] profile lookup failed:', profileError?.code, profileError?.message, 'user:', data.user.id);
       return res.status(401).json({
         success: false,
-        error: 'User profile not found.'
+        error: `User profile not found. [debug: ${profileError?.code || 'no-row'} ${profileError?.message || ''}]`
       });
     }
 
