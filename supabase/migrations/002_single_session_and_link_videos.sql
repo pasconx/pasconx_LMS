@@ -28,7 +28,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  IF current_user != 'service_role' AND NOT public.is_admin() THEN
+  IF coalesce((auth.jwt() ->> 'role'), '') != 'service_role' AND current_user != 'service_role' AND NOT public.is_admin() THEN
     IF NEW.active_session_id IS DISTINCT FROM OLD.active_session_id
        OR NEW.session_last_seen IS DISTINCT FROM OLD.session_last_seen
        OR NEW.session_device IS DISTINCT FROM OLD.session_device THEN

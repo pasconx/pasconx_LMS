@@ -12,7 +12,7 @@ if (typeof globalThis.WebSocket === 'undefined') {
 }
 
 // Ensure environment variables are loaded if imported before app.js
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+if (!process.env.SUPABASE_URL || (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SECRET_KEY)) {
   dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 }
 
@@ -34,13 +34,13 @@ export const DATA_BACKEND = process.env.DATA_BACKEND || (process.env.VERCEL ? 's
 export const isSupabase = DATA_BACKEND === 'supabase';
 
 // Production Supabase fallback credentials for seamless Vercel deployment
-const DEFAULT_SUPABASE_URL = 'https://vuwrwufmeczfpucscggf.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://xorwviktjzftdfkciknj.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1d3J3dWZtZWN6ZnB1Y3NjZ2dmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2Mjk2NjUsImV4cCI6MjEwNTIwNTY2NX0.Biu5Eo6QInNjLem4xFhCiVjRlVCD4fxKN1g0FbTlzw0';
 const DEFAULT_SUPABASE_SERVICE_ROLE_KEY = 'sb_secret_brz6T6ooF4R3QcOPdS5fAg_VLNJ89Ja';
 
 const supabaseUrl = process.env.SUPABASE_URL || (process.env.VERCEL ? DEFAULT_SUPABASE_URL : undefined);
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || (process.env.VERCEL ? DEFAULT_SUPABASE_SERVICE_ROLE_KEY : undefined);
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || (process.env.VERCEL ? DEFAULT_SUPABASE_ANON_KEY : supabaseServiceRoleKey);
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || (process.env.VERCEL ? DEFAULT_SUPABASE_SERVICE_ROLE_KEY : undefined);
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || (process.env.VERCEL ? DEFAULT_SUPABASE_ANON_KEY : supabaseServiceRoleKey);
 
 /**
  * Helper boolean indicating if Supabase environment variables are configured

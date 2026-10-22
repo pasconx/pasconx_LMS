@@ -9,7 +9,8 @@ export class YouTubeProvider extends VideoProvider {
    * Return client-safe playback configuration
    */
   getPlaybackConfig(video, user) {
-    const origin = process.env.CLIENT_URL || 'http://localhost:5173';
+    const origin = process.env.CLIENT_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
     const videoId = video.external_video_id;
 
     const embedUrl = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(origin)}&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&disablekb=0`;

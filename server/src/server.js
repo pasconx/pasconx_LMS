@@ -10,3 +10,5 @@ app.listen(PORT, () => {
   console.log(`   Mode:       ${process.env.NODE_ENV || 'development'}`);
   console.log(`====================================================`);
 });
+
+export default app;

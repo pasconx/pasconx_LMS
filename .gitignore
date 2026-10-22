@@ -51,3 +51,7 @@ scratch/
 
 # Supabase CLI temp
 supabase/.temp/
+
+vercel.env
+*.env
+
