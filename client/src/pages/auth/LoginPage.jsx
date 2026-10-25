@@ -33,7 +33,12 @@ export default function LoginPage() {
       const destination = res.user.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard';
       navigate(destination, { replace: true });
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      const msg = typeof err === 'string'
+        ? err
+        : (typeof err?.message === 'string'
+            ? err.message
+            : (err?.message?.message || err?.data?.error || err?.code || 'Login failed. Please check your credentials.'));
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setIsSubmitting(false);
     }
@@ -82,7 +87,9 @@ export default function LoginPage() {
           {error && (
             <div className="mb-5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 p-3.5 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="text-sm font-medium text-rose-800 dark:text-rose-300">{error}</div>
+              <div className="text-sm font-medium text-rose-800 dark:text-rose-300">
+                {typeof error === 'string' ? error : (error?.message || String(error))}
+              </div>
             </div>
           )}
 
