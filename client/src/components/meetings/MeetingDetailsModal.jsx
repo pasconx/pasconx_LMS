@@ -9,7 +9,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   BookOpen,
-  Radio
+  Radio,
+  Repeat
 } from 'lucide-react';
 
 /**
@@ -103,7 +104,22 @@ export default function MeetingDetailsModal({ meeting, onClose, onAction, isAdmi
               <span>{meeting.course_title}</span>
             </span>
 
-            {/* Platform Badge */}
+            {meeting.recurrence_group_id && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800">
+              <Repeat className="w-3 h-3 text-indigo-500" />
+              <span>
+                {meeting.recurrence_type === 'weekdays'
+                  ? 'Repeats Mon–Fri'
+                  : meeting.recurrence_type === 'daily'
+                  ? 'Repeats Daily'
+                  : meeting.recurrence_type === 'weekly'
+                  ? 'Repeats Weekly'
+                  : 'Recurring Series'}
+              </span>
+            </span>
+          )}
+
+          {/* Platform Badge */}
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
               isGoogleMeet 
                 ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'

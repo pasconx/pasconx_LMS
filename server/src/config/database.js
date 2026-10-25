@@ -209,6 +209,20 @@ export function initDatabase() {
     console.warn('Database migration notice for users session columns:', migrationErr.message);
   }
 
+  // Safe migration: recurring live meeting columns on meetings table
+  try {
+    const meetingCols = new Set(db.prepare("PRAGMA table_info(meetings)").all().map(c => c.name));
+    if (!meetingCols.has('recurrence_group_id')) db.exec("ALTER TABLE meetings ADD COLUMN recurrence_group_id TEXT");
+    if (!meetingCols.has('recurrence_type')) db.exec("ALTER TABLE meetings ADD COLUMN recurrence_type TEXT DEFAULT 'none'");
+    if (!meetingCols.has('recurrence_end_date')) db.exec("ALTER TABLE meetings ADD COLUMN recurrence_end_date TEXT");
+    if (!meetingCols.has('scheduled_date')) db.exec("ALTER TABLE meetings ADD COLUMN scheduled_date TEXT");
+    if (!meetingCols.has('timezone')) db.exec("ALTER TABLE meetings ADD COLUMN timezone TEXT DEFAULT 'Asia/Kolkata'");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_meetings_recurrence_group ON meetings(recurrence_group_id)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_meetings_scheduled_date ON meetings(scheduled_date)");
+  } catch (migrationErr) {
+    console.warn('Database migration notice for meetings recurrence columns:', migrationErr.message);
+  }
+
   // Safe migration: allow video_type='link' / privacy_type='link_url' (SQLite cannot alter CHECK -> rebuild table once)
   try {
     const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='videos'").get();
