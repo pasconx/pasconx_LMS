@@ -7,9 +7,12 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import Navbar from './components/common/Navbar.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import DesktopOnlyGuard from './components/common/DesktopOnlyGuard.jsx';
+import { MaintenanceProvider, useMaintenance } from './context/MaintenanceContext.jsx';
+import MaintenanceGuard from './components/common/MaintenanceGuard.jsx';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage.jsx';
+import MaintenancePage from './pages/MaintenancePage.jsx';
 import StudentDashboard from './pages/student/StudentDashboard.jsx';
 import MyCoursesPage from './pages/student/MyCoursesPage.jsx';
 import RecordingsPage from './pages/student/RecordingsPage.jsx';
@@ -47,9 +50,11 @@ function MainLayout() {
 
 function RootRedirect() {
   const { user, loading } = useAuth();
+  const { isMaintenanceActive } = useMaintenance();
   if (loading) return null;
+  if (user?.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+  if (isMaintenanceActive) return <Navigate to="/maintenance" replace />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
   return <Navigate to="/student/dashboard" replace />;
 }
 
@@ -59,59 +64,66 @@ export default function App() {
       <DesktopOnlyGuard>
       <ThemeProvider>
         <AuthProvider>
-          <BrowserRouter>
-          <Routes>
-            {/* Root redirect */}
-            <Route path="/" element={<RootRedirect />} />
+          <MaintenanceProvider>
+            <BrowserRouter>
+            <Routes>
+              {/* Root redirect */}
+              <Route path="/" element={<RootRedirect />} />
 
-            {/* Public Auth Route */}
-            <Route path="/login" element={<LoginPage />} />
+              {/* Public Maintenance Route */}
+              <Route path="/maintenance" element={<MaintenancePage />} />
 
-            {/* Protected Student Routes */}
-            <Route
-              element={
-                <ProtectedRoute allowedRoles={['STUDENT']}>
-                  <CourseProvider>
+              {/* Public Auth Route */}
+              <Route path="/login" element={<LoginPage />} />
+
+              {/* Protected Student Routes */}
+              <Route
+                element={
+                  <MaintenanceGuard>
+                    <ProtectedRoute allowedRoles={['STUDENT']}>
+                      <CourseProvider>
+                        <MainLayout />
+                      </CourseProvider>
+                    </ProtectedRoute>
+                  </MaintenanceGuard>
+                }
+              >
+                <Route path="/student/dashboard" element={<StudentDashboard />} />
+                <Route path="/student/courses" element={<MyCoursesPage />} />
+                <Route path="/student/recordings" element={<RecordingsPage />} />
+                <Route path="/student/courses/:courseId" element={<CourseDetailPage />} />
+                <Route path="/student/watch/:videoId" element={<VideoWatchPage />} />
+                <Route path="/student/calendar" element={<StudentCalendarPage />} />
+                <Route path="/student/notes" element={<AllNotesPage />} />
+                <Route path="/student/profile" element={<StudentProfile />} />
+              </Route>
+
+              {/* Protected Admin Routes */}
+              <Route
+                element={
+                  <ProtectedRoute allowedRoles={['ADMIN']}>
                     <MainLayout />
-                  </CourseProvider>
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/student/dashboard" element={<StudentDashboard />} />
-              <Route path="/student/courses" element={<MyCoursesPage />} />
-              <Route path="/student/recordings" element={<RecordingsPage />} />
-              <Route path="/student/courses/:courseId" element={<CourseDetailPage />} />
-              <Route path="/student/watch/:videoId" element={<VideoWatchPage />} />
-              <Route path="/student/calendar" element={<StudentCalendarPage />} />
-              <Route path="/student/notes" element={<AllNotesPage />} />
-              <Route path="/student/profile" element={<StudentProfile />} />
-            </Route>
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/students" element={<StudentsManagement />} />
+                <Route path="/admin/courses" element={<CoursesManagement />} />
+                <Route path="/admin/videos" element={<VideosManagement />} />
+                <Route path="/admin/enrollments" element={<EnrollmentsManagement />} />
+                <Route path="/admin/meetings" element={<MeetingsManagement />} />
+                <Route path="/admin/calendar" element={<AdminCalendarPage />} />
+                <Route path="/admin/settings" element={<AdminSettings />} />
+              </Route>
 
-            {/* Protected Admin Routes */}
-            <Route
-              element={
-                <ProtectedRoute allowedRoles={['ADMIN']}>
-                  <MainLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/students" element={<StudentsManagement />} />
-              <Route path="/admin/courses" element={<CoursesManagement />} />
-              <Route path="/admin/videos" element={<VideosManagement />} />
-              <Route path="/admin/enrollments" element={<EnrollmentsManagement />} />
-              <Route path="/admin/meetings" element={<MeetingsManagement />} />
-              <Route path="/admin/calendar" element={<AdminCalendarPage />} />
-              <Route path="/admin/settings" element={<AdminSettings />} />
-            </Route>
-
-            {/* 404 Route */}
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+              {/* 404 Route */}
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </BrowserRouter>
+          </MaintenanceProvider>
+        </AuthProvider>
+      </ThemeProvider>
       </DesktopOnlyGuard>
-  </ErrorBoundary>
+    </ErrorBoundary>
   );
 }

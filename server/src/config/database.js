@@ -177,9 +177,30 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_meetings_status ON meetings(status, start_time);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON security_audit_logs(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_event ON security_audit_logs(event_type, created_at);
+
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `;
 
   db.exec(initStatements);
+
+  // Seed default maintenance_mode system setting if not present
+  try {
+    const defaultMaintenance = JSON.stringify({
+      enabled: false,
+      title: "We're Under Maintenance",
+      message: "Our platform is currently undergoing scheduled maintenance to improve performance, security and your learning experience."
+    });
+    db.prepare(`
+      INSERT OR IGNORE INTO system_settings (key, value, updated_at) 
+      VALUES ('maintenance_mode', ?, datetime('now'))
+    `).run(defaultMaintenance);
+  } catch (mErr) {
+    console.warn('Database init notice for system_settings:', mErr.message);
+  }
 
   // Safe migration: Add missing columns if videos table already existed
   try {

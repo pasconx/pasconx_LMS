@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ThemeToggle from '../../components/common/ThemeToggle.jsx';
 import TurnstileWidget from '../../components/common/TurnstileWidget.jsx';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { 
   Lock, 
   Mail, 
   ArrowRight, 
   ShieldCheck, 
-  AlertCircle
+  AlertCircle,
+  Wrench
 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -19,6 +21,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login, sessionNotice } = useAuth();
+  const { isMaintenanceActive, maintenance } = useMaintenance();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -77,6 +80,26 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0 relative z-10">
         <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl py-8 px-6 shadow-2xl rounded-3xl sm:px-10 border border-white/50 dark:border-slate-800/80 transition-colors">
+          {isMaintenanceActive && (
+            <div className="mb-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/80 p-3.5 flex items-start gap-3">
+              <Wrench className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <div className="font-bold text-amber-800 dark:text-amber-300">
+                  Platform Maintenance Active
+                </div>
+                <div className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Student access is temporarily suspended. Only administrators can sign in at this time.
+                </div>
+                <Link 
+                  to="/maintenance" 
+                  className="inline-flex items-center gap-1 font-semibold text-cyan-600 dark:text-cyan-400 hover:underline pt-0.5"
+                >
+                  View Maintenance Notice &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
+
           {sessionNotice && !error && (
             <div className="mb-5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 p-3.5 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />

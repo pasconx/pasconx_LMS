@@ -5,6 +5,7 @@ import { supabase, supabaseAuth } from '../config/supabase.js';
 import { JWT_SECRET, invalidateSessionCache, invalidateUserSessions } from '../middleware/auth.js';
 import { logSecurityEvent } from '../utils/auditLogger.js';
 import { gateLogin, releaseSessionBySid, getSessionIdFromReq, SESSION_COOKIE } from '../utils/sessionLock.js';
+import { isMaintenanceActive, getMaintenanceConfig } from './systemController.js';
 
 export const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -74,6 +75,24 @@ async function loginSqlite(req, res, next) {
         success: false,
         error: 'Invalid email or password.'
       });
+    }
+
+    // Platform Maintenance check: students are barred from logging in while active
+    if (user.role !== 'ADMIN') {
+      const maintenanceActive = await isMaintenanceActive();
+      if (maintenanceActive) {
+        const config = await getMaintenanceConfig();
+        return res.status(503).json({
+          success: false,
+          code: 'MAINTENANCE_MODE',
+          error: config.message || 'Platform is currently undergoing scheduled maintenance. Student login is temporarily suspended.',
+          maintenance: {
+            enabled: true,
+            title: config.title,
+            message: config.message
+          }
+        });
+      }
     }
 
     // Desktop-only + single active session (students). Sends its own error response if blocked.
@@ -225,6 +244,24 @@ async function loginSupabase(req, res, next) {
         success: false,
         error: 'Your account has been disabled. Please contact the administrator.'
       });
+    }
+
+    // Platform Maintenance check: students are barred from logging in while active
+    if (profile.role !== 'ADMIN') {
+      const maintenanceActive = await isMaintenanceActive();
+      if (maintenanceActive) {
+        const config = await getMaintenanceConfig();
+        return res.status(503).json({
+          success: false,
+          code: 'MAINTENANCE_MODE',
+          error: config.message || 'Platform is currently undergoing scheduled maintenance. Student login is temporarily suspended.',
+          maintenance: {
+            enabled: true,
+            title: config.title,
+            message: config.message
+          }
+        });
+      }
     }
 
     // Desktop-only + single active session (students). Sends its own error response if blocked.
