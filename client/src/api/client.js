@@ -28,6 +28,14 @@ api.interceptors.response.use(
     if (status === 401 && code === 'SESSION_INVALID') {
       window.dispatchEvent(new CustomEvent('pasconx:session-ended', { detail: { message } }));
     }
+
+    // Platform maintenance mode active -> notify UI immediately
+    if (status === 503 && (code === 'MAINTENANCE_MODE' || error.response?.data?.maintenance)) {
+      window.dispatchEvent(new CustomEvent('pasconx:maintenance-detected', { 
+        detail: error.response?.data?.maintenance || { enabled: true, message } 
+      }));
+    }
+
     return Promise.reject({ message, status, code, data: error.response?.data });
   }
 );

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "PASCONX Video Portal - Private Educational Platform",
   "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "test": "npm --prefix server test",
     "seed": "npm --prefix server run seed",

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ChangePasswordCard from '../../components/common/ChangePasswordCard.jsx';
+import api from '../../api/client.js';
 import { 
   Settings, 
   ShieldCheck, 
@@ -9,12 +10,161 @@ import {
   Key, 
   CheckCircle2, 
   AlertTriangle,
-  Info 
+  Info,
+  Wrench,
+  Power,
+  Image as ImageIcon,
+  Save,
+  Loader2,
+  Check,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function AdminSettings() {
+  const [maintenance, setMaintenance] = useState({
+    enabled: false,
+    title: "We're Under Maintenance",
+    message: "Our platform is currently undergoing scheduled maintenance to improve performance, security and your learning experience."
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // 'ENABLE' | 'DISABLE'
+  const [showImagePreview, setShowImagePreview] = useState(true);
+  const [notification, setNotification] = useState(null);
+
+  const [titleInput, setTitleInput] = useState('');
+  const [messageInput, setMessageInput] = useState('');
+
+  // Fetch current maintenance settings and listen for real-time changes
+  useEffect(() => {
+    let mounted = true;
+    const fetchMaintenance = async () => {
+      try {
+        const res = await api.get('/admin/maintenance');
+        if (mounted && res.success && res.maintenance) {
+          setMaintenance(res.maintenance);
+          setTitleInput(res.maintenance.title || "We're Under Maintenance");
+          setMessageInput(res.maintenance.message || "Our platform is currently undergoing scheduled maintenance to improve performance, security and your learning experience.");
+        }
+      } catch (err) {
+        console.error('Failed to load maintenance settings:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchMaintenance();
+
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('pasconx_maintenance_channel');
+      bc.onmessage = (event) => {
+        if (mounted && event?.data?.type === 'MAINTENANCE_UPDATE' && event.data.maintenance) {
+          setMaintenance(event.data.maintenance);
+        }
+      };
+    } catch (e) {}
+
+    const onMaintenanceChanged = (e) => {
+      if (mounted && e?.detail) {
+        setMaintenance(e.detail);
+      }
+    };
+    window.addEventListener('pasconx:maintenance-changed', onMaintenanceChanged);
+
+    return () => {
+      mounted = false;
+      if (bc) bc.close();
+      window.removeEventListener('pasconx:maintenance-changed', onMaintenanceChanged);
+    };
+  }, []);
+
+  const showToast = (type, text) => {
+    setNotification({ type, text });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleToggleClick = (targetState) => {
+    setPendingAction(targetState ? 'ENABLE' : 'DISABLE');
+    setShowConfirmModal(true);
+  };
+
+  const executeToggle = async () => {
+    const willEnable = pendingAction === 'ENABLE';
+    setShowConfirmModal(false);
+    setSaving(true);
+    try {
+      const res = await api.post('/admin/maintenance', {
+        enabled: willEnable,
+        title: titleInput,
+        message: messageInput
+      });
+      if (res.success && res.maintenance) {
+        setMaintenance(res.maintenance);
+        showToast('success', res.message || `Maintenance mode ${willEnable ? 'enabled' : 'disabled'}.`);
+        window.dispatchEvent(new CustomEvent('pasconx:maintenance-changed', { detail: res.maintenance }));
+        
+        try {
+          const bc = new BroadcastChannel('pasconx_maintenance_channel');
+          bc.postMessage({ type: 'MAINTENANCE_UPDATE', maintenance: res.maintenance });
+          bc.close();
+        } catch (e) {}
+      }
+    } catch (err) {
+      const errMsg = err?.message || 'Failed to update maintenance settings.';
+      showToast('error', errMsg);
+    } finally {
+      setSaving(false);
+      setPendingAction(null);
+    }
+  };
+
+  const handleSaveTextOnly = async (e) => {
+    e?.preventDefault();
+    setSaving(true);
+    try {
+      const res = await api.post('/admin/maintenance', {
+        enabled: maintenance.enabled,
+        title: titleInput,
+        message: messageInput
+      });
+      if (res.success && res.maintenance) {
+        setMaintenance(res.maintenance);
+        showToast('success', 'Maintenance announcement message saved successfully.');
+        window.dispatchEvent(new CustomEvent('pasconx:maintenance-changed', { detail: res.maintenance }));
+        
+        try {
+          const bc = new BroadcastChannel('pasconx_maintenance_channel');
+          bc.postMessage({ type: 'MAINTENANCE_UPDATE', maintenance: res.maintenance });
+          bc.close();
+        } catch (e) {}
+      }
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to save announcement.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Notification Toast */}
+      {notification && (
+        <div className={`p-4 rounded-2xl flex items-center gap-3 border shadow-lg transition-all animate-in fade-in slide-in-from-top-2 duration-300 ${
+          notification.type === 'success'
+            ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+            : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+        }`}>
+          {notification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+          )}
+          <span className="text-sm font-semibold">{notification.text}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5 transition-colors">
@@ -22,13 +172,233 @@ export default function AdminSettings() {
           Platform Configuration & Architecture
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors">
-          Review active video delivery providers, security parameters, and future DRM integration readiness.
+          Manage platform maintenance state, admin credentials, video delivery providers, and security rules.
         </p>
       </div>
 
+      {/* Platform Maintenance Mode Card (Admin Privileges) */}
+      <div className={`rounded-3xl border p-6 sm:p-8 shadow-sm space-y-6 transition-all duration-300 ${
+        maintenance.enabled
+          ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/80 shadow-amber-500/5 ring-2 ring-amber-500/20'
+          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+                maintenance.enabled
+                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/60'
+                  : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-cyan-400 border-indigo-200 dark:border-indigo-900/60'
+              }`}>
+                Admin Privileges & Controls
+              </span>
+              <span className="text-xs text-slate-400">• System Toggle</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Wrench className={`w-5 h-5 ${maintenance.enabled ? 'text-amber-500 animate-spin-slow' : 'text-slate-500 dark:text-slate-400'}`} />
+              Platform Maintenance Mode
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+              When maintenance mode is active, student access and video playback are temporarily suspended. 
+              Non-admin visitors are presented with the branded PASCONX maintenance screen. 
+              <strong> Administrators retain complete access to all panels and tools.</strong>
+            </p>
+          </div>
+
+          {/* Status Indicator & Main Toggle */}
+          <div className="flex flex-col sm:items-end gap-2 shrink-0">
+            {loading ? (
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading status...
+              </div>
+            ) : maintenance.enabled ? (
+              <div className="space-y-2 text-left sm:text-right">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
+                  MAINTENANCE ACTIVE
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleClick(false)}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {saving && pendingAction === 'DISABLE' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+                    <span>{saving && pendingAction === 'DISABLE' ? 'Deactivating...' : 'Deactivate Maintenance'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 text-left sm:text-right">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  SYSTEM OPERATIONAL
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleClick(true)}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-amber-600/20 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {saving && pendingAction === 'ENABLE' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+                    <span>{saving && pendingAction === 'ENABLE' ? 'Activating...' : 'Enable Maintenance Mode'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Maintenance Image Preview Section */}
+        <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-slate-50 dark:bg-slate-950/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+              <ImageIcon className="w-4 h-4 text-cyan-500" />
+              <span>Branded Maintenance Display Image</span>
+              <span className="font-mono text-[11px] text-slate-400">(/public/maintenance.png)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowImagePreview(!showImagePreview)}
+              className="text-xs text-indigo-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+            >
+              {showImagePreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              <span>{showImagePreview ? 'Hide Preview' : 'Show Graphic'}</span>
+            </button>
+          </div>
+
+          {showImagePreview && (
+            <div className="relative group rounded-xl overflow-hidden border border-slate-300 dark:border-slate-800 bg-slate-900 max-w-2xl mx-auto shadow-md">
+              <img 
+                src="/maintenance.png" 
+                alt="Maintenance Graphic" 
+                className="w-full h-auto object-cover max-h-72" 
+              />
+              <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/70 backdrop-blur-md rounded-md text-[10px] text-slate-300 font-mono">
+                Asset: PASCONX System Maintenance
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Announcement Message Editor */}
+        <form onSubmit={handleSaveTextOnly} className="space-y-4 pt-2">
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Headline / Display Title
+              </label>
+              <input
+                type="text"
+                value={titleInput}
+                onChange={(e) => setTitleInput(e.target.value)}
+                placeholder="We're Under Maintenance"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-cyan-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Announcement Details / Explanation
+              </label>
+              <textarea
+                rows={3}
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                placeholder="Our platform is currently undergoing scheduled maintenance..."
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-cyan-500 transition-colors resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-slate-400">
+              {maintenance.updated_at ? `Last updated: ${new Date(maintenance.updated_at).toLocaleString()}` : ''}
+            </span>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-medium text-xs border border-slate-700 transition-all cursor-pointer disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-cyan-400" />}
+              <span>Save Announcement</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                pendingAction === 'ENABLE'
+                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400'
+                  : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {pendingAction === 'ENABLE' ? <AlertTriangle className="w-6 h-6" /> : <CheckCircle2 className="w-6 h-6" />}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {pendingAction === 'ENABLE' ? 'Enable Maintenance Mode?' : 'Restore Platform Access?'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {pendingAction === 'ENABLE' ? 'System lockdown confirmation' : 'Resume normal student operations'}
+                </p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2 leading-relaxed bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+              {pendingAction === 'ENABLE' ? (
+                <>
+                  <p className="font-semibold text-amber-700 dark:text-amber-400">
+                    ⚠️ When enabled:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400">
+                    <li>Student access and active video sessions will be suspended immediately.</li>
+                    <li>Students attempting to log in will be blocked with an informative notice.</li>
+                    <li>All portal routes will display the branded PASCONX maintenance banner.</li>
+                    <li><strong>You (Admin) will retain full access to this panel.</strong></li>
+                  </ul>
+                </>
+              ) : (
+                <p>
+                  This will deactivate the maintenance screen and allow students to log in, access courses, and watch videos normally.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setShowConfirmModal(false); setPendingAction(null); }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeToggle}
+                className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all cursor-pointer ${
+                  pendingAction === 'ENABLE'
+                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
+                    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
+                }`}
+              >
+                {pendingAction === 'ENABLE' ? 'Yes, Activate Maintenance' : 'Yes, Restore Access'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Admin Self-Service Change Password */}
       <ChangePasswordCard />
-
 
       {/* Video Provider Abstraction Status */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xs space-y-6 transition-colors">

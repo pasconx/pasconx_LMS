@@ -11,13 +11,21 @@ import authRoutes from './routes/authRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import drmRoutes from './routes/drmRoutes.js';
+import systemRoutes from './routes/systemRoutes.js';
+import { checkMaintenanceMode } from './middleware/maintenanceGuard.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { verifyCloudflareOrigin } from './middleware/originShield.js';
 import { initDatabase } from './config/database.js';
 import { logger } from './utils/logger.js';
+import { loadEnvironmentFiles, detectEnvironment, extractProjectRef } from './config/envValidator.js';
 
-dotenv.config();
+// Load prioritized environment variables (.env.local over .env)
+loadEnvironmentFiles();
+
+const activeEnv = detectEnvironment();
+const supaRef = extractProjectRef(process.env.SUPABASE_URL);
+logger.info(`[PASCONX BOOT]: Active Environment=PASCONX-${activeEnv.toUpperCase()} Backend=${process.env.DATA_BACKEND || 'sqlite'} SupabaseRef=${supaRef || 'none'}`);
 
 // Ensure database tables exist
 initDatabase();
@@ -213,13 +221,14 @@ app.get('/api/proxy/thumbnail', async (req, res) => {
 });
 
 // API Routes
+app.use('/api/system', systemRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/student', studentRoutes);
+app.use('/api/student', checkMaintenanceMode, studentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/drm', drmRoutes);
 
 // Direct playback authorization alias: GET /api/videos/:videoId/play
-app.get('/api/videos/:videoId/play', (req, res, next) => {
+app.get('/api/videos/:videoId/play', checkMaintenanceMode, (req, res, next) => {
   req.url = `/videos/${req.params.videoId}/play`;
   return studentRoutes(req, res, next);
 });

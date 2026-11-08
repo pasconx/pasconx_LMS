@@ -31,6 +31,7 @@ import {
   updateMeetingStatus,
   deleteMeeting
 } from '../controllers/meetingController.js';
+import { getMaintenance, updateMaintenance } from '../controllers/systemController.js';
 import { authenticateUser, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -82,5 +83,9 @@ router.post('/meetings', createMeeting);
 router.put('/meetings/:id', updateMeeting);
 router.patch('/meetings/:id/status', updateMeetingStatus);
 router.delete('/meetings/:id', deleteMeeting);
+
+// System & Maintenance Controls
+router.get('/maintenance', getMaintenance);
+router.post('/maintenance', updateMaintenance);
 
 export default router;

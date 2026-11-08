@@ -1,10 +1,11 @@
 -- ==============================================================================
--- PASCONX LMS & Video Portal — Stage 1 Supabase Database Migration
+-- PASCONX LMS & Video Portal — Complete Unified Production/Dev Schema
 -- Brand: PASCONX ("Transforming Talent into IT Xperts")
--- File: supabase/migrations/001_initial_pasconx_schema.sql
--- Description: Complete production PostgreSQL schema, indexes, RLS policies, 
---              tamper-proof security triggers, and security definer functions.
--- Mode: PREPARATION ONLY — NOT EXECUTED YET
+-- Description: Consolidated, zero-error, end-to-end schema for Supabase.
+--              Includes all tables, single-session lock, recurring meetings,
+--              system maintenance mode, RLS policies, indexes, and tamper guards.
+--
+-- TARGET: Copy and paste this whole file into the Dev Supabase SQL Editor -> Run.
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -30,8 +31,6 @@ $$;
 -- ------------------------------------------------------------------------------
 -- 3. PROFILES TABLE (Maps 1:1 to auth.users)
 -- ------------------------------------------------------------------------------
--- Passwords and credentials live exclusively in auth.users.
--- Application profile, authorization roles, and account status live in public.profiles.
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -39,6 +38,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   role TEXT NOT NULL DEFAULT 'STUDENT' CHECK (role IN ('STUDENT', 'ADMIN')),
   status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED')),
   avatar_url TEXT,
+  active_session_id TEXT,
+  session_last_seen TIMESTAMPTZ,
+  session_device TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
@@ -47,6 +49,9 @@ COMMENT ON TABLE public.profiles IS 'PASCONX user profiles linked 1:1 with Supab
 COMMENT ON COLUMN public.profiles.id IS 'References auth.users.id';
 COMMENT ON COLUMN public.profiles.role IS 'Authorization role: STUDENT or ADMIN';
 COMMENT ON COLUMN public.profiles.status IS 'Account status: ACTIVE or DISABLED';
+COMMENT ON COLUMN public.profiles.active_session_id IS 'Random id of the ONE device currently logged in (NULL = nobody)';
+COMMENT ON COLUMN public.profiles.session_last_seen IS 'Last heartbeat from the active session; lock expires if stale';
+COMMENT ON COLUMN public.profiles.session_device IS 'User-agent of the active session (for admin reference)';
 
 -- ------------------------------------------------------------------------------
 -- 4. COURSES TABLE
@@ -66,16 +71,16 @@ COMMENT ON TABLE public.courses IS 'PASCONX course catalog';
 
 -- ------------------------------------------------------------------------------
 -- 5. VIDEOS TABLE
+-- Supports YouTube unlisted/private, Widevine DRM, Link videos, Google Drive, VdoCipher
 -- ------------------------------------------------------------------------------
--- Preserves existing player architectures: YouTube unlisted/private and Widevine DRM streaming.
 CREATE TABLE IF NOT EXISTS public.videos (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   course_id BIGINT NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
-  video_type TEXT NOT NULL DEFAULT 'youtube' CHECK (video_type IN ('youtube', 'widevine')),
+  video_type TEXT NOT NULL DEFAULT 'youtube' CHECK (video_type IN ('youtube', 'widevine', 'link', 'google_drive', 'vdocipher')),
   provider TEXT NOT NULL DEFAULT 'youtube',
-  privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK (privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm')),
+  privacy_type TEXT NOT NULL DEFAULT 'youtube_unlisted' CHECK (privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm', 'link_url', 'google_drive', 'vdocipher_drm')),
   external_video_id TEXT NOT NULL,
   manifest_url TEXT,
   license_server_url TEXT,
@@ -86,12 +91,11 @@ CREATE TABLE IF NOT EXISTS public.videos (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
-COMMENT ON TABLE public.videos IS 'Video lessons for courses supporting YouTube & Widevine DRM streaming';
+COMMENT ON TABLE public.videos IS 'Video lessons for courses supporting YouTube, Widevine DRM, and Link streaming';
 
 -- ------------------------------------------------------------------------------
 -- 6. ENROLLMENTS TABLE (Course Access Windows)
 -- ------------------------------------------------------------------------------
--- Uses ON DELETE RESTRICT on course_id to prevent accidental deletion of courses with active students.
 CREATE TABLE IF NOT EXISTS public.enrollments (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -159,7 +163,7 @@ CREATE TABLE IF NOT EXISTS public.student_notes (
 COMMENT ON TABLE public.student_notes IS 'Time-stamped notes written by students during video playback';
 
 -- ------------------------------------------------------------------------------
--- 10. MEETINGS TABLE (Google Meet & Zoom Sessions)
+-- 10. MEETINGS TABLE (Single & Recurring Live Meetings)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.meetings (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -174,12 +178,17 @@ CREATE TABLE IF NOT EXISTS public.meetings (
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'cancelled', 'completed')),
   cancellation_reason TEXT,
   created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  recurrence_group_id TEXT,
+  recurrence_type TEXT DEFAULT 'none' CHECK (recurrence_type IN ('none', 'daily', 'weekdays', 'weekly', 'custom')),
+  recurrence_end_date TIMESTAMPTZ,
+  scheduled_date DATE,
+  timezone TEXT DEFAULT 'Asia/Kolkata',
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   CONSTRAINT chk_meetings_duration CHECK (end_time > start_time)
 );
 
-COMMENT ON TABLE public.meetings IS 'Live course sessions for Google Meet and Zoom';
+COMMENT ON TABLE public.meetings IS 'Live course sessions for Google Meet and Zoom with recurrence support';
 
 -- ------------------------------------------------------------------------------
 -- 11. SECURITY AUDIT LOGS TABLE
@@ -200,7 +209,19 @@ CREATE TABLE IF NOT EXISTS public.security_audit_logs (
 COMMENT ON TABLE public.security_audit_logs IS 'Immutable audit trail of access attempts, logins, and playback events';
 
 -- ------------------------------------------------------------------------------
--- 12. PERFORMANCE & FOREIGN KEY INDEXES
+-- 12. SYSTEM SETTINGS TABLE (Maintenance Mode & Platform Toggles)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  description TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+COMMENT ON TABLE public.system_settings IS 'Platform-wide configuration and feature toggles';
+
+-- ------------------------------------------------------------------------------
+-- 13. PERFORMANCE & FOREIGN KEY INDEXES
 -- ------------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_profiles_role_status ON public.profiles(role, status);
 
@@ -209,6 +230,7 @@ CREATE INDEX IF NOT EXISTS idx_courses_created_by ON public.courses(created_by);
 
 CREATE INDEX IF NOT EXISTS idx_videos_course_order ON public.videos(course_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_videos_course_status ON public.videos(course_id, status);
+CREATE INDEX IF NOT EXISTS idx_videos_created_at ON public.videos(created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_enrollments_student_status ON public.enrollments(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_enrollments_course_status ON public.enrollments(course_id, status);
@@ -228,13 +250,16 @@ CREATE INDEX IF NOT EXISTS idx_notes_video ON public.student_notes(video_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_course_start ON public.meetings(course_id, start_time);
 CREATE INDEX IF NOT EXISTS idx_meetings_status_start ON public.meetings(status, start_time);
 CREATE INDEX IF NOT EXISTS idx_meetings_time_range ON public.meetings(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_meetings_recurrence_group ON public.meetings(recurrence_group_id);
+CREATE INDEX IF NOT EXISTS idx_meetings_scheduled_date ON public.meetings(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_meetings_course_scheduled ON public.meetings(course_id, scheduled_date);
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_date ON public.security_audit_logs(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_event_date ON public.security_audit_logs(event_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.security_audit_logs(created_at DESC);
 
 -- ------------------------------------------------------------------------------
--- 13. UPDATED_AT TRIGGERS ATTACHMENT
+-- 14. UPDATED_AT TRIGGERS ATTACHMENT
 -- ------------------------------------------------------------------------------
 DO $$
 BEGIN
@@ -259,13 +284,14 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_meetings_updated_at') THEN
     CREATE TRIGGER trg_meetings_updated_at BEFORE UPDATE ON public.meetings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_system_settings_updated_at') THEN
+    CREATE TRIGGER trg_system_settings_updated_at BEFORE UPDATE ON public.system_settings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  END IF;
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 14. AUTH SYNCHRONIZATION TRIGGER (auth.users -> public.profiles)
+-- 15. AUTH SYNCHRONIZATION TRIGGER (auth.users -> public.profiles)
 -- ------------------------------------------------------------------------------
--- Prevents privilege escalation: client metadata can NEVER set role = 'ADMIN'.
--- Admin accounts must be created through admin tools or server-side service_role.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -275,8 +301,9 @@ AS $$
 DECLARE
   assigned_role TEXT := 'STUDENT';
 BEGIN
-  -- Only service_role or admin process can assign an initial role other than STUDENT
-  IF current_user = 'service_role' AND NEW.raw_user_meta_data->>'role' = 'ADMIN' THEN
+  -- Service role, postgres admin or users created with explicit ADMIN role in metadata
+  IF (current_user IN ('postgres', 'supabase_admin', 'service_role') OR coalesce((auth.jwt() ->> 'role'), '') = 'service_role')
+     AND NEW.raw_user_meta_data->>'role' = 'ADMIN' THEN
     assigned_role := 'ADMIN';
   END IF;
 
@@ -302,7 +329,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ------------------------------------------------------------------------------
--- 15. RLS SECURITY DEFINER HELPER FUNCTIONS
+-- 16. RLS SECURITY DEFINER HELPER FUNCTIONS
 -- ------------------------------------------------------------------------------
 
 -- Check if current authenticated user has active ADMIN role
@@ -322,7 +349,6 @@ AS $$
 $$;
 
 -- Check if current authenticated user has active student enrollment for a course
--- Timestamps are compared directly in UTC (TIMESTAMPTZ >= TIMESTAMPTZ)
 CREATE OR REPLACE FUNCTION public.has_active_course_enrollment(p_course_id BIGINT)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -345,7 +371,6 @@ AS $$
 $$;
 
 -- Check if current authenticated user has active enrollment for a video
--- Optionally validates that the video belongs to the expected course
 CREATE OR REPLACE FUNCTION public.has_active_video_enrollment(p_video_id BIGINT, p_course_id BIGINT DEFAULT NULL)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -363,7 +388,8 @@ AS $$
 $$;
 
 -- ------------------------------------------------------------------------------
--- 16. TAMPER GUARDS (Prevents Privilege Escalation by Students)
+-- 17. TAMPER GUARDS & SINGLE-SESSION GUARDS
+-- Allows bypass for server service_role, postgres superuser, and admin accounts
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.guard_profile_updates()
 RETURNS TRIGGER
@@ -372,18 +398,26 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  -- If not an admin and not service_role, prohibit tampering with role or status or id
-  IF current_user != 'service_role' AND NOT public.is_admin() THEN
-    IF NEW.role IS DISTINCT FROM OLD.role THEN
-      RAISE EXCEPTION 'Access Denied: Only administrators can modify account roles.';
-    END IF;
-    IF NEW.status IS DISTINCT FROM OLD.status THEN
-      RAISE EXCEPTION 'Access Denied: Only administrators can modify account status.';
-    END IF;
-    IF NEW.id IS DISTINCT FROM OLD.id THEN
-      RAISE EXCEPTION 'Access Denied: Account identifier cannot be changed.';
-    END IF;
+  IF current_user IN ('postgres', 'supabase_admin', 'service_role') THEN
+    RETURN NEW;
   END IF;
+  IF coalesce((auth.jwt() ->> 'role'), '') = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+  IF public.is_admin() THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.role IS DISTINCT FROM OLD.role THEN
+    RAISE EXCEPTION 'Access Denied: Only administrators can modify account roles.';
+  END IF;
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    RAISE EXCEPTION 'Access Denied: Only administrators can modify account status.';
+  END IF;
+  IF NEW.id IS DISTINCT FROM OLD.id THEN
+    RAISE EXCEPTION 'Access Denied: Account identifier cannot be changed.';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -393,8 +427,40 @@ CREATE TRIGGER trg_guard_profile_role
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.guard_profile_updates();
 
+CREATE OR REPLACE FUNCTION public.guard_session_columns()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user IN ('postgres', 'supabase_admin', 'service_role') THEN
+    RETURN NEW;
+  END IF;
+  IF coalesce((auth.jwt() ->> 'role'), '') = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+  IF public.is_admin() THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.active_session_id IS DISTINCT FROM OLD.active_session_id
+     OR NEW.session_last_seen IS DISTINCT FROM OLD.session_last_seen
+     OR NEW.session_device IS DISTINCT FROM OLD.session_device THEN
+    RAISE EXCEPTION 'Access Denied: session lock columns are managed by the server.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_session_columns ON public.profiles;
+CREATE TRIGGER trg_guard_session_columns
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.guard_session_columns();
+
 -- ------------------------------------------------------------------------------
--- 17. ENABLE ROW LEVEL SECURITY (RLS) ON ALL TABLES
+-- 18. ENABLE ROW LEVEL SECURITY (RLS) ON ALL TABLES
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
@@ -405,9 +471,10 @@ ALTER TABLE public.course_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.security_audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 
 -- ------------------------------------------------------------------------------
--- 18. ROW LEVEL SECURITY POLICIES
+-- 19. ROW LEVEL SECURITY POLICIES
 -- ------------------------------------------------------------------------------
 
 -- ===== PROFILES POLICIES =====
@@ -562,84 +629,40 @@ CREATE POLICY "audit_logs_insert_authenticated" ON public.security_audit_logs
     (SELECT public.is_admin())
   );
 
--- No UPDATE or DELETE policies on security_audit_logs to guarantee complete immutability.
+-- ===== SYSTEM SETTINGS POLICIES =====
+DROP POLICY IF EXISTS "Allow public read access to system_settings" ON public.system_settings;
+CREATE POLICY "Allow public read access to system_settings"
+  ON public.system_settings
+  FOR SELECT
+  USING (true);
 
-
--- ==============================================================================
--- PASCONX LMS — Migration 002
--- 1) Single active session per student (login lock)
--- 2) Allow "link" videos (any video URL: Drive / Vimeo / MP4 / HLS / other)
---
--- HOW TO RUN: Supabase Dashboard -> SQL Editor -> paste this whole file -> Run.
--- Safe to run more than once.
--- ==============================================================================
-
--- ------------------------------------------------------------------------------
--- 1. SINGLE-SESSION COLUMNS ON PROFILES
--- ------------------------------------------------------------------------------
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_session_id TEXT;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS session_last_seen TIMESTAMPTZ;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS session_device TEXT;
-
-COMMENT ON COLUMN public.profiles.active_session_id IS 'Random id of the ONE device currently logged in (NULL = nobody)';
-COMMENT ON COLUMN public.profiles.session_last_seen IS 'Last heartbeat from the active session; lock expires if stale';
-COMMENT ON COLUMN public.profiles.session_device IS 'User-agent of the active session (for admin reference)';
-
--- Students must never be able to read/modify their own lock columns from the browser.
--- The Node server uses the service_role key (bypasses RLS) so it is unaffected.
--- Block direct client updates of these columns:
-CREATE OR REPLACE FUNCTION public.guard_session_columns()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  IF current_user != 'service_role' AND NOT public.is_admin() THEN
-    IF NEW.active_session_id IS DISTINCT FROM OLD.active_session_id
-       OR NEW.session_last_seen IS DISTINCT FROM OLD.session_last_seen
-       OR NEW.session_device IS DISTINCT FROM OLD.session_device THEN
-      RAISE EXCEPTION 'Access Denied: session lock columns are managed by the server.';
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_guard_session_columns ON public.profiles;
-CREATE TRIGGER trg_guard_session_columns
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.guard_session_columns();
+DROP POLICY IF EXISTS "Allow admins to modify system_settings" ON public.system_settings;
+CREATE POLICY "Allow admins to modify system_settings"
+  ON public.system_settings
+  FOR ALL
+  TO authenticated
+  USING ((SELECT public.is_admin()))
+  WITH CHECK ((SELECT public.is_admin()));
 
 -- ------------------------------------------------------------------------------
--- 2. VIDEOS: allow video_type = 'link' and privacy_type = 'link_url'
---    (drops whatever old CHECK constraints exist on those two columns, then re-adds wider ones)
+-- 20. ROLES & POSTGREST PERMISSIONS (DATA API EXPOSURE)
 -- ------------------------------------------------------------------------------
-DO $$
-DECLARE r RECORD;
-BEGIN
-  FOR r IN
-    SELECT conname
-    FROM pg_constraint
-    WHERE conrelid = 'public.videos'::regclass
-      AND contype = 'c'
-      AND (pg_get_constraintdef(oid) ILIKE '%video_type%'
-           OR pg_get_constraintdef(oid) ILIKE '%privacy_type%')
-  LOOP
-    EXECUTE format('ALTER TABLE public.videos DROP CONSTRAINT %I', r.conname);
-  END LOOP;
-END $$;
-
--- NOT VALID => existing rows are not re-checked (safe if older rows use other values, e.g. google_drive)
-ALTER TABLE public.videos
-  ADD CONSTRAINT videos_video_type_check
-  CHECK (video_type IN ('youtube', 'widevine', 'link', 'google_drive', 'vdocipher')) NOT VALID;
-
-ALTER TABLE public.videos
-  ADD CONSTRAINT videos_privacy_type_check
-  CHECK (privacy_type IN ('youtube_unlisted', 'youtube_private', 'widevine_drm', 'link_url', 'google_drive', 'vdocipher_drm')) NOT VALID;
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 
 -- ------------------------------------------------------------------------------
--- 3. Index for the "Recorded Videos" page (newest first)
+-- 21. SEED DEFAULT SYSTEM SETTINGS
 -- ------------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_videos_created_at ON public.videos (created_at DESC);
+INSERT INTO public.system_settings (key, value, description)
+VALUES (
+  'maintenance_mode',
+  '{
+    "enabled": false,
+    "title": "We''re Under Maintenance",
+    "message": "Our platform is currently undergoing scheduled maintenance to improve performance, security and your learning experience."
+  }'::jsonb,
+  'Controls whether student access is suspended during system maintenance'
+)
+ON CONFLICT (key) DO NOTHING;

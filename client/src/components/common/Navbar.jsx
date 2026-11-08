@@ -19,8 +19,11 @@ import {
   Calendar,
   Radio,
   ChevronDown,
-  Layers
+  Layers,
+  Wrench
 } from 'lucide-react';
+import api from '../../api/client.js';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -36,6 +39,7 @@ export default function Navbar() {
   };
 
   const isAdmin = user?.role === 'ADMIN';
+  const { isMaintenanceActive } = useMaintenance();
 
   // Close dropdown on click outside or Escape key
   useEffect(() => {
@@ -231,6 +235,22 @@ export default function Navbar() {
                 <Settings className="w-3.5 h-3.5" />
                 <span>Settings</span>
               </Link>
+
+              {/* Maintenance Mode Active Warning Badge */}
+              {isMaintenanceActive && (
+                <Link
+                  to="/admin/settings"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 transition-all shadow-xs"
+                  title="Maintenance mode is active. Student access is suspended."
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
+                  <Wrench className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Maintenance ON</span>
+                </Link>
+              )}
             </nav>
           ) : (
             <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 mx-2 shrink-0">
