@@ -1,20 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import {
+  loadEnvironmentFiles,
+  validateEnvironment,
+  detectEnvironment,
+  extractProjectRef,
+  DEV_SUPABASE_REF
+} from './envValidator.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Polyfill global WebSocket if missing in Node 20 for Supabase realtime initialization
+// Polyfill global WebSocket if missing in Node 20/22 for Supabase realtime initialization
 if (typeof globalThis.WebSocket === 'undefined') {
   globalThis.WebSocket = class DummyWebSocket {};
 }
 
-// Ensure environment variables are loaded if imported before app.js
-if (!process.env.SUPABASE_URL || (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SECRET_KEY)) {
-  dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-}
+// 1. Ensure prioritized environment variables are loaded (.env.local over .env)
+loadEnvironmentFiles();
 
 // Auto-detect serverless Vercel environment and ensure DATA_BACKEND is supabase
 if (process.env.VERCEL && !process.env.DATA_BACKEND) {
@@ -23,8 +22,6 @@ if (process.env.VERCEL && !process.env.DATA_BACKEND) {
 
 /**
  * Active data backend selector: 'sqlite' | 'supabase'
- * Defaults strictly to 'sqlite' for zero-regression safety locally,
- * but defaults to 'supabase' on Vercel since SQLite is non-persistent in serverless lambda.
  */
 export const DATA_BACKEND = process.env.DATA_BACKEND || (process.env.VERCEL ? 'supabase' : 'sqlite');
 
@@ -33,24 +30,47 @@ export const DATA_BACKEND = process.env.DATA_BACKEND || (process.env.VERCEL ? 's
  */
 export const isSupabase = DATA_BACKEND === 'supabase';
 
-const DEFAULT_SUPABASE_URL = 'https://qpmedrprhnavmsetectk.supabase.co';
+/**
+ * 2. Validate environment & guard against cross-environment pollution
+ */
+export const activeEnvironment = detectEnvironment();
+let envReport = null;
 
-const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || supabaseServiceRoleKey;
+try {
+  envReport = validateEnvironment();
+} catch (err) {
+  if (isSupabase) {
+    console.error('\n' + '='.repeat(60));
+    console.error(' [PASCONX FATAL SECURITY / CONFIG ERROR]');
+    console.error(' ' + err.message);
+    console.error('='.repeat(60) + '\n');
+    throw err;
+  } else {
+    // When SQLite is used locally, log notice without halting
+    console.warn('[PASCONX ENV NOTICE]:', err.message);
+  }
+}
+
+// Supabase Connection Credentials (NO silent fallback to production)
+const supabaseUrl = process.env.SUPABASE_URL || null;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || null;
+const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || supabaseSecretKey;
+export const supabaseJwksUrl = process.env.SUPABASE_JWKS_URL || null;
+
+export const projectRef = extractProjectRef(supabaseUrl);
 
 /**
  * Helper boolean indicating if Supabase environment variables are configured
  */
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseServiceRoleKey);
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseSecretKey);
 
 /**
- * Server-side Supabase administrative client initialized with service_role key.
+ * Server-side Supabase administrative client initialized with secret/service_role key.
  * Used for database queries and token verification without session pollution.
  * Configured with persistSession: false and autoRefreshToken: false for stateless Node.js execution.
  */
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+  ? createClient(supabaseUrl, supabaseSecretKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -61,10 +81,10 @@ export const supabase = isSupabaseConfigured
 
 /**
  * Client for user password authentication requests.
- * Using anon key prevents mutating the service_role client session state.
+ * Using publishable/anon key prevents mutating the service_role client session state.
  */
 export const supabaseAuth = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+  ? createClient(supabaseUrl, supabasePublishableKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -82,7 +102,7 @@ export const supabaseAuth = isSupabaseConfigured
 export function getScopedSupabaseClient(req) {
   const token = req?.cookies?.pasconix_token || req?.headers?.authorization?.replace(/^Bearer\s+/i, '');
   if (token && isSupabaseConfigured) {
-    return createClient(supabaseUrl, supabaseAnonKey, {
+    return createClient(supabaseUrl, supabasePublishableKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false, autoRefreshToken: false },
       realtime: { disabled: true }

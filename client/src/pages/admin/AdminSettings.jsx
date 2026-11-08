@@ -37,7 +37,7 @@ export default function AdminSettings() {
   const [titleInput, setTitleInput] = useState('');
   const [messageInput, setMessageInput] = useState('');
 
-  // Fetch current maintenance settings
+  // Fetch current maintenance settings and listen for real-time changes
   useEffect(() => {
     let mounted = true;
     const fetchMaintenance = async () => {
@@ -55,7 +55,29 @@ export default function AdminSettings() {
       }
     };
     fetchMaintenance();
-    return () => { mounted = false; };
+
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('pasconx_maintenance_channel');
+      bc.onmessage = (event) => {
+        if (mounted && event?.data?.type === 'MAINTENANCE_UPDATE' && event.data.maintenance) {
+          setMaintenance(event.data.maintenance);
+        }
+      };
+    } catch (e) {}
+
+    const onMaintenanceChanged = (e) => {
+      if (mounted && e?.detail) {
+        setMaintenance(e.detail);
+      }
+    };
+    window.addEventListener('pasconx:maintenance-changed', onMaintenanceChanged);
+
+    return () => {
+      mounted = false;
+      if (bc) bc.close();
+      window.removeEventListener('pasconx:maintenance-changed', onMaintenanceChanged);
+    };
   }, []);
 
   const showToast = (type, text) => {
@@ -82,6 +104,12 @@ export default function AdminSettings() {
         setMaintenance(res.maintenance);
         showToast('success', res.message || `Maintenance mode ${willEnable ? 'enabled' : 'disabled'}.`);
         window.dispatchEvent(new CustomEvent('pasconx:maintenance-changed', { detail: res.maintenance }));
+        
+        try {
+          const bc = new BroadcastChannel('pasconx_maintenance_channel');
+          bc.postMessage({ type: 'MAINTENANCE_UPDATE', maintenance: res.maintenance });
+          bc.close();
+        } catch (e) {}
       }
     } catch (err) {
       const errMsg = err?.message || 'Failed to update maintenance settings.';
@@ -105,6 +133,12 @@ export default function AdminSettings() {
         setMaintenance(res.maintenance);
         showToast('success', 'Maintenance announcement message saved successfully.');
         window.dispatchEvent(new CustomEvent('pasconx:maintenance-changed', { detail: res.maintenance }));
+        
+        try {
+          const bc = new BroadcastChannel('pasconx_maintenance_channel');
+          bc.postMessage({ type: 'MAINTENANCE_UPDATE', maintenance: res.maintenance });
+          bc.close();
+        } catch (e) {}
       }
     } catch (err) {
       showToast('error', err?.message || 'Failed to save announcement.');
@@ -188,12 +222,13 @@ export default function AdminSettings() {
                 </span>
                 <div>
                   <button
+                    type="button"
                     onClick={() => handleToggleClick(false)}
                     disabled={saving}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-60"
                   >
-                    <Power className="w-4 h-4" />
-                    <span>Deactivate Maintenance</span>
+                    {saving && pendingAction === 'DISABLE' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+                    <span>{saving && pendingAction === 'DISABLE' ? 'Deactivating...' : 'Deactivate Maintenance'}</span>
                   </button>
                 </div>
               </div>
@@ -205,12 +240,13 @@ export default function AdminSettings() {
                 </span>
                 <div>
                   <button
+                    type="button"
                     onClick={() => handleToggleClick(true)}
                     disabled={saving}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-amber-600/20 transition-all cursor-pointer disabled:opacity-60"
                   >
-                    <Power className="w-4 h-4" />
-                    <span>Enable Maintenance Mode</span>
+                    {saving && pendingAction === 'ENABLE' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+                    <span>{saving && pendingAction === 'ENABLE' ? 'Activating...' : 'Enable Maintenance Mode'}</span>
                   </button>
                 </div>
               </div>

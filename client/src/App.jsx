@@ -58,6 +58,18 @@ function RootRedirect() {
   return <Navigate to="/student/dashboard" replace />;
 }
 
+function MaintenanceRoute() {
+  const { isMaintenanceActive, loading, maintenance, refreshMaintenance } = useMaintenance();
+  const { user } = useAuth();
+
+  if (!loading && !isMaintenanceActive) {
+    const target = user?.role === 'ADMIN' ? '/admin/dashboard' : (user ? '/student/dashboard' : '/login');
+    return <Navigate to={target} replace />;
+  }
+
+  return <MaintenancePage maintenanceData={maintenance} onRefresh={refreshMaintenance} />;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -71,7 +83,7 @@ export default function App() {
               <Route path="/" element={<RootRedirect />} />
 
               {/* Public Maintenance Route */}
-              <Route path="/maintenance" element={<MaintenancePage />} />
+              <Route path="/maintenance" element={<MaintenanceRoute />} />
 
               {/* Public Auth Route */}
               <Route path="/login" element={<LoginPage />} />

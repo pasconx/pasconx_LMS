@@ -18,8 +18,14 @@ import { apiLimiter } from './middleware/rateLimiter.js';
 import { verifyCloudflareOrigin } from './middleware/originShield.js';
 import { initDatabase } from './config/database.js';
 import { logger } from './utils/logger.js';
+import { loadEnvironmentFiles, detectEnvironment, extractProjectRef } from './config/envValidator.js';
 
-dotenv.config();
+// Load prioritized environment variables (.env.local over .env)
+loadEnvironmentFiles();
+
+const activeEnv = detectEnvironment();
+const supaRef = extractProjectRef(process.env.SUPABASE_URL);
+logger.info(`[PASCONX BOOT]: Active Environment=PASCONX-${activeEnv.toUpperCase()} Backend=${process.env.DATA_BACKEND || 'sqlite'} SupabaseRef=${supaRef || 'none'}`);
 
 // Ensure database tables exist
 initDatabase();

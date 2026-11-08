@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { 
   Wrench, 
   RefreshCw, 
@@ -7,26 +9,68 @@ import {
   Clock, 
   ExternalLink,
   ChevronRight,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 
 export default function MaintenancePage({ maintenanceData, onRefresh }) {
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { isMaintenanceActive, maintenance: ctxMaintenance, refreshMaintenance } = useMaintenance();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const title = maintenanceData?.title || "We're Under Maintenance";
-  const message = maintenanceData?.message || 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusNotice, setStatusNotice] = useState(null);
+
+  const activeMaintenance = maintenanceData || ctxMaintenance;
+  const title = activeMaintenance?.title || "We're Under Maintenance";
+  const message = activeMaintenance?.message || 
     "Our platform is currently undergoing scheduled maintenance to improve performance, security and your learning experience.";
+
+  // Auto-redirect if maintenance becomes inactive while user is on this page
+  useEffect(() => {
+    if (!isMaintenanceActive) {
+      setStatusNotice({
+        type: 'success',
+        text: 'Platform is back online! Restoring your session...'
+      });
+      const timer = setTimeout(() => {
+        const target = user?.role === 'ADMIN' ? '/admin/dashboard' : (user ? '/student/dashboard' : '/login');
+        navigate(target, { replace: true });
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [isMaintenanceActive, user, navigate]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setStatusNotice(null);
     try {
-      if (onRefresh) {
-        await onRefresh();
+      const checker = onRefresh || refreshMaintenance;
+      const latest = await checker();
+      if (latest && latest.enabled === false) {
+        setStatusNotice({
+          type: 'success',
+          text: 'Platform is back online! Redirecting you now...'
+        });
+        setTimeout(() => {
+          const target = user?.role === 'ADMIN' ? '/admin/dashboard' : (user ? '/student/dashboard' : '/login');
+          navigate(target, { replace: true });
+        }, 1000);
       } else {
-        window.location.reload();
+        setStatusNotice({
+          type: 'info',
+          text: 'Scheduled maintenance is still in progress. Please check again shortly.'
+        });
+        setTimeout(() => setStatusNotice(null), 4000);
       }
+    } catch (err) {
+      setStatusNotice({
+        type: 'info',
+        text: 'Could not verify status. Please check again in a moment.'
+      });
+      setTimeout(() => setStatusNotice(null), 4000);
     } finally {
-      setTimeout(() => setIsRefreshing(false), 600);
+      setIsRefreshing(false);
     }
   };
 
@@ -58,12 +102,20 @@ export default function MaintenancePage({ maintenanceData, onRefresh }) {
         </div>
 
         {/* Live Status Pill */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold backdrop-blur-md">
+        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border ${
+          isMaintenanceActive
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+        }`}>
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+              isMaintenanceActive ? 'bg-amber-400' : 'bg-emerald-400'
+            }`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${
+              isMaintenanceActive ? 'bg-amber-500' : 'bg-emerald-500'
+            }`}></span>
           </span>
-          <span>Scheduled Maintenance</span>
+          <span>{isMaintenanceActive ? 'Scheduled Maintenance' : 'System Operational'}</span>
         </div>
       </header>
 
@@ -93,6 +145,22 @@ export default function MaintenancePage({ maintenanceData, onRefresh }) {
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
             {message}
           </p>
+
+          {/* Real-time Status Notice */}
+          {statusNotice && (
+            <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border animate-in fade-in duration-300 ${
+              statusNotice.type === 'success'
+                ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-200'
+                : 'bg-slate-800/80 border-cyan-500/30 text-cyan-200'
+            }`}>
+              {statusNotice.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-cyan-400 shrink-0" />
+              )}
+              <span>{statusNotice.text}</span>
+            </div>
+          )}
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button

@@ -17,12 +17,14 @@ export function MaintenanceProvider({ children }) {
       const res = await api.get('/system/maintenance');
       if (res?.success && res.maintenance) {
         setMaintenance(res.maintenance);
+        return res.maintenance;
       }
     } catch (err) {
       // Ignore network errors on check
     } finally {
       setLoading(false);
     }
+    return null;
   }, []);
 
   useEffect(() => {
@@ -43,15 +45,30 @@ export function MaintenanceProvider({ children }) {
     window.addEventListener('pasconx:maintenance-detected', onMaintenanceDetected);
     window.addEventListener('pasconx:maintenance-changed', onMaintenanceChanged);
 
-    // Periodic poll every 60s
-    const timer = setInterval(fetchMaintenance, 60 * 1000);
+    // Cross-tab real-time sync via BroadcastChannel
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('pasconx_maintenance_channel');
+      bc.onmessage = (event) => {
+        if (event?.data?.type === 'MAINTENANCE_UPDATE' && event.data.maintenance) {
+          setMaintenance(event.data.maintenance);
+        }
+      };
+    } catch (e) {
+      // BroadcastChannel fallback
+    }
+
+    // Dynamic polling: fast 5s polling while maintenance is active, 30s when inactive
+    const pollInterval = maintenance?.enabled ? 5000 : 30000;
+    const timer = setInterval(fetchMaintenance, pollInterval);
 
     return () => {
       window.removeEventListener('pasconx:maintenance-detected', onMaintenanceDetected);
       window.removeEventListener('pasconx:maintenance-changed', onMaintenanceChanged);
+      if (bc) bc.close();
       clearInterval(timer);
     };
-  }, [fetchMaintenance]);
+  }, [fetchMaintenance, maintenance?.enabled]);
 
   const value = {
     maintenance,
