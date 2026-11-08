@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": "26.x"
   },
   "scripts": {
     "start": "node src/server.js",
@@ -26,9 +26,6 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "^11.3.0"
   },
   "devDependencies": {
     "supertest": "^7.0.0"
